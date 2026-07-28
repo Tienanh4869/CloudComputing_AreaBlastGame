@@ -10,7 +10,15 @@ const connectRedis = async () => {
     ? `redis://:${REDIS.password}@${REDIS.host}:${REDIS.port}`
     : `redis://${REDIS.host}:${REDIS.port}`;
 
-  redisClient = createClient({ url });
+  redisClient = createClient({ 
+    url,
+    socket: {
+      reconnectStrategy: (retries) => {
+        if (retries > 2) return new Error('Max retries reached');
+        return Math.min(retries * 500, 2000);
+      }
+    }
+  });
 
   redisClient.on('error', (err) => logger.error('[Redis] Error:', err.message));
   redisClient.on('connect', () => logger.info('[Redis] Connected successfully'));

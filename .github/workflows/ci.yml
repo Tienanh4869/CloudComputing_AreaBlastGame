@@ -57,7 +57,7 @@ jobs:
       - name: Set image tags
         id: tags
         run: |
-          echo "sha=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          echo "sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
           echo "backend=${{ env.ACR_NAME }}.azurecr.io/${{ env.BACKEND_APP }}" >> $GITHUB_OUTPUT
           echo "frontend=${{ env.ACR_NAME }}.azurecr.io/${{ env.FRONTEND_APP }}" >> $GITHUB_OUTPUT
 
@@ -69,6 +69,11 @@ jobs:
           tags: |
             ${{ steps.tags.outputs.backend }}:latest
             ${{ steps.tags.outputs.backend }}:${{ steps.tags.outputs.sha }}
+
+      - name: Create Frontend Env File
+        run: |
+          echo "VITE_API_URL=https://arenablast-backend.icyhill-22f427c6.southeastasia.azurecontainerapps.io/api" > frontend/.env.production
+          echo "VITE_SOCKET_URL=https://arenablast-backend.icyhill-22f427c6.southeastasia.azurecontainerapps.io" >> frontend/.env.production
 
       - name: Build & push frontend
         uses: docker/build-push-action@v5

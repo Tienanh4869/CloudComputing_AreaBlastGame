@@ -163,7 +163,9 @@ router.post('/upload', async (req, res, next) => {
 
     fs.writeFileSync(uploadPath, data);
 
-    const fileUrl = `http://localhost:3001/uploads/${fileName}`;
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    const fileUrl = `${protocol}://${host}/uploads/${fileName}`;
     res.json({ url: fileUrl });
   } catch (err) { next(err); }
 });

@@ -13,6 +13,9 @@ COPY src/ ./src/
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3001/health', r => process.exit(r.statusCode === 200 ? 0 : 1))"
 
+# Create uploads directory with correct permissions before switching to non-root user
+RUN mkdir -p /app/uploads && chown -R node:node /app
+
 # Non-root user for security
 USER node
 
