@@ -7,6 +7,8 @@ const { generateId } = require('../utils/helpers');
 const { User, Player } = require('../models');
 const { signToken, authenticate } = require('../middleware/auth');
 const logger = require('../utils/logger');
+const { BlobServiceClient } = require('@azure/storage-blob');
+const ENV = require('../config/env');
 
 // Input validation rules
 const registerRules = [
@@ -159,13 +161,37 @@ router.post('/upload', async (req, res, next) => {
     }
 
     const fileName = `${generateId()}.${extension}`;
-    const uploadPath = path.join(__dirname, '..', '..', 'uploads', fileName);
+    
+    // Azure Blob Storage Fallback Logic
+    let fileUrl = '';
+    if (ENV.AZURE_STORAGE_CONNECTION_STRING) {
+      try {
+        const blobServiceClient = BlobServiceClient.fromConnectionString(ENV.AZURE_STORAGE_CONNECTION_STRING);
+        const containerClient = blobServiceClient.getContainerClient('arenablast-uploads');
+        // Ensure container exists and is public
+        await containerClient.createIfNotExists({ access: 'blob' });
+        
+        const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+        // Upload data with correct content type
+        await blockBlobClient.uploadData(data, {
+          blobHTTPHeaders: { blobContentType: `image/${extension}` }
+        });
+        fileUrl = blockBlobClient.url;
+        logger.info('[Upload] File uploaded to Azure Blob', { fileName });
+      } catch (azureErr) {
+        logger.error('[Upload] Azure Blob upload failed', azureErr);
+        return res.status(500).json({ error: 'Failed to upload to cloud storage' });
+      }
+    } else {
+      // Fallback to local storage
+      const uploadPath = path.join(__dirname, '..', '..', 'uploads', fileName);
+      fs.writeFileSync(uploadPath, data);
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      fileUrl = `${protocol}://${host}/uploads/${fileName}`;
+      logger.info('[Upload] File saved locally (Fallback)', { fileName });
+    }
 
-    fs.writeFileSync(uploadPath, data);
-
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-    const host = req.headers['x-forwarded-host'] || req.get('host');
-    const fileUrl = `${protocol}://${host}/uploads/${fileName}`;
     res.json({ url: fileUrl });
   } catch (err) { next(err); }
 });

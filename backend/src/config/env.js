@@ -53,4 +53,7 @@ module.exports = {
 
   // Azure Application Insights
   APP_INSIGHTS_CONNECTION: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING || null,
+
+  // Azure Storage
+  AZURE_STORAGE_CONNECTION_STRING: process.env.AZURE_STORAGE_CONNECTION_STRING || null,
 };
