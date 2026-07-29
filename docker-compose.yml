@@ -58,6 +58,9 @@ services:
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:-super-secret-change-me}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:80}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
+      OTEL_LOG_LEVEL: debug
     ports:
       - "3001:3001"
     depends_on:
@@ -84,7 +87,7 @@ services:
         VITE_SOCKET_URL: ""  # Use Nginx proxy
     container_name: arenablast-frontend
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       backend:
         condition: service_healthy
