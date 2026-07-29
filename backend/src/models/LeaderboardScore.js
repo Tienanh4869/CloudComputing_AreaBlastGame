@@ -23,7 +23,7 @@ const LeaderboardScore = sequelize.define('LeaderboardScore', {
   },
   // Period: all_time | daily | weekly
   period: {
-    type: DataTypes.ENUM('all_time', 'daily', 'weekly'),
+    type: DataTypes.STRING(20),
     defaultValue: 'all_time',
   },
   kills:  { type: DataTypes.INTEGER, defaultValue: 0 },

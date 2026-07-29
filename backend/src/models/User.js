@@ -27,7 +27,7 @@ const User = sequelize.define('User', {
   },
   // Role: 'player' | 'admin'
   role: {
-    type: DataTypes.ENUM('player', 'admin'),
+    type: DataTypes.STRING(20),
     defaultValue: 'player',
   },
   is_active: {

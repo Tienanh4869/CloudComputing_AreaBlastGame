@@ -14,8 +14,8 @@ async function bootstrap() {
 
   // 2. Sync DB models (alter: safe for dev, use migrations in prod)
   if (NODE_ENV === 'development') {
-    await sequelize.sync({ alter: true });
-    logger.info('[DB] Models synced (alter mode)');
+    await sequelize.sync();
+    logger.info('[DB] Models synced');
   } else {
     await sequelize.sync();
     logger.info('[DB] Models synced');
