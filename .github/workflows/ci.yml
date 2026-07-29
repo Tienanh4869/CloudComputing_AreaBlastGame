@@ -35,6 +35,14 @@ jobs:
         working-directory: ./backend
         run: npm test
 
+      - name: Run Trivy vulnerability scanner (Cloud-Native Security)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+
   # ── Job 2: Build Docker Images ─────────────────────────────
   build:
     name: Build & Push Docker
