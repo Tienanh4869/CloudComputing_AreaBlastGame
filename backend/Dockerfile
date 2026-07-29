@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Copy dependency files first (for better layer caching)
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy source only
 COPY src/ ./src/
@@ -21,4 +21,4 @@ USER node
 
 EXPOSE 3001
 
-CMD ["node", "src/server.js"]
+CMD ["node", "--require", "./src/instrumentation.js", "src/server.js"]
