@@ -14,7 +14,7 @@ const Match = sequelize.define('Match', {
   },
   // Status: playing → finished
   status: {
-    type: DataTypes.ENUM('playing', 'finished'),
+    type: DataTypes.STRING(20),
     defaultValue: 'playing',
   },
   started_at: {

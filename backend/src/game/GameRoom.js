@@ -220,6 +220,11 @@ class GameRoom {
     for (const player of this.players.values()) {
       if (!player.alive) continue;
 
+      // Tự động hồi máu (Auto health regeneration) - Hồi 0.1 HP mỗi tick, không vượt quá maxHp
+      if (player.hp < player.maxHp) {
+        player.hp = Math.min(player.maxHp, player.hp + 0.1);
+      }
+
       // Cứ mỗi 50 điểm sẽ bự lên từ từ thêm 5 đơn vị radius (rất mượt mà)
       player.radius = 16 + Math.min((player.score / 50) * 5, 40);
 

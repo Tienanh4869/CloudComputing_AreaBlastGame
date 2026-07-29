@@ -3,7 +3,11 @@
 // Or:  node seed.js  (from D:\Game\backend, seed.js is a symlink/copy)
 
 const path = require('path');
-const BACKEND = path.join(__dirname, '../backend');
+const fs = require('fs');
+let BACKEND = path.resolve(__dirname, '../backend');
+if (!fs.existsSync(BACKEND)) {
+  BACKEND = path.resolve(__dirname, '.'); // if running inside /app
+}
 
 // Resolve all modules from backend's node_modules (since deps live there)
 const Module = require('module');
@@ -22,12 +26,12 @@ Module._resolveFilename = function (request, parent, isMain, options) {
 };
 
 require('dotenv').config({ path: path.join(BACKEND, '.env') });
-const { sequelize, connectDB } = require('../backend/src/config/database');
+const { sequelize, connectDB } = require(path.join(BACKEND, 'src/config/database'));
 const {
   User, Player, Room, Match, MatchPlayer, MatchEvent, LeaderboardScore
-} = require('../backend/src/models');
+} = require(path.join(BACKEND, 'src/models'));
 const bcrypt = require('bcryptjs');
-const { generateRoomCode } = require('../backend/src/utils/helpers');
+const { generateRoomCode } = require(path.join(BACKEND, 'src/utils/helpers'));
 
 const COLORS = ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C', '#E67E22', '#E91E63'];
 

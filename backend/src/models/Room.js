@@ -19,7 +19,7 @@ const Room = sequelize.define('Room', {
   },
   // Status: waiting → playing → finished
   status: {
-    type: DataTypes.ENUM('waiting', 'playing', 'finished'),
+    type: DataTypes.STRING(20),
     defaultValue: 'waiting',
   },
   max_players: {

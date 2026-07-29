@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getRooms, createRoom, getRoomByCode } from '../api/rooms';
-import { logout as apiLogout, updateProfile, uploadImage } from '../api/auth';
+import { logout as apiLogout, updateProfile, uploadImage, updateNickname } from '../api/auth';
 import useAuthStore from '../store/authStore';
 import useGameStore from '../store/gameStore';
 
@@ -31,6 +31,7 @@ export default function LobbyPage() {
   const [joinCode, setJoinCode] = useState('');
   const [newRoom, setNewRoom] = useState({ name: '', max_players: 4 });
   const [profileForm, setProfileForm] = useState({
+    nickname: player?.nickname || '',
     avatar_url: player?.avatar_url || '',
     weapon_url: player?.weapon_url || ''
   });
@@ -95,12 +96,22 @@ export default function LobbyPage() {
     e.preventDefault();
     setUpdatingProfile(true);
     try {
-      const { data } = await updateProfile(profileForm);
-      useAuthStore.getState().setPlayer(data.player);
+      const { data } = await updateProfile({
+        avatar_url: profileForm.avatar_url,
+        weapon_url: profileForm.weapon_url
+      });
+      let updatedPlayer = data.player;
+
+      if (profileForm.nickname && profileForm.nickname !== player.nickname) {
+        const { data: nameData } = await updateNickname({ nickname: profileForm.nickname });
+        updatedPlayer = nameData.player;
+      }
+
+      useAuthStore.getState().setPlayer(updatedPlayer);
       toast.success('Profile updated!');
       setShowProfile(false);
     } catch (err) {
-      toast.error('Failed to update profile');
+      toast.error(err.response?.data?.error || 'Failed to update profile');
     } finally {
       setUpdatingProfile(false);
     }
@@ -235,6 +246,13 @@ export default function LobbyPage() {
               onClick={(e) => e.stopPropagation()}>
               <h3 style={{ marginBottom: 20 }}>Customize Profile</h3>
               <form onSubmit={handleUpdateProfile}>
+                <div className="form-group">
+                  <label className="form-label">Nickname</label>
+                  <input className="form-input" placeholder="Your nickname"
+                    value={profileForm.nickname}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, nickname: e.target.value }))}
+                    required minLength={2} maxLength={30} />
+                </div>
                 <div className="form-group">
                   <label className="form-label">Avatar Image</label>
                   <input className="form-input" type="file" accept="image/*"
