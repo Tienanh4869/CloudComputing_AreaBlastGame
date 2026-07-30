@@ -14,7 +14,7 @@ export default function GamePage() {
   const { player } = useAuthStore();
   const {
     matchStatus, myHp, myMaxHp, myScore, myKills, myAlive,
-    mapWidth, mapHeight, matchLeaderboard, killFeed, matchResults,
+    mapWidth, mapHeight, mapUrl, matchLeaderboard, killFeed, matchResults,
     players, currentRoom,
   } = useGameStore();
 
@@ -140,6 +140,7 @@ export default function GamePage() {
             onAttack={sendAttack}
             mapWidth={mapWidth}
             mapHeight={mapHeight}
+            mapUrl={mapUrl}
             joystickRef={joystickRef}
           />
           <MobileControls joystickRef={joystickRef} onAttack={sendAttack} />

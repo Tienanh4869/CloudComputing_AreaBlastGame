@@ -63,7 +63,7 @@ const initSocket = (io) => {
         socket.currentRoomId = roomId;
 
         // Get or create in-memory game room
-        const gameRoom = GameManager.getOrCreate(roomId, roomCode || room.code);
+        const gameRoom = await GameManager.getOrCreate(roomId, roomCode || room.code);
 
         // Prevent same account from playing against itself in the same room
         if (socket.playerId) {
@@ -99,8 +99,9 @@ const initSocket = (io) => {
         socket.emit('room_joined', {
           roomId,
           state: gameRoom.getState(),
-          mapWidth: GAME.mapWidth,
-          mapHeight: GAME.mapHeight,
+          mapWidth: gameRoom.mapConfig.width,
+          mapHeight: gameRoom.mapConfig.height,
+          mapUrl: gameRoom.mapConfig.url,
         });
 
         logger.gameEvent('player_joined_room', {
@@ -132,8 +133,9 @@ const initSocket = (io) => {
         // Already started — send current state
         socket.emit('match_started', {
           matchId: gameRoom.matchId,
-          mapWidth: GAME.mapWidth,
-          mapHeight: GAME.mapHeight,
+          mapWidth: gameRoom.mapConfig.width,
+          mapHeight: gameRoom.mapConfig.height,
+          mapUrl: gameRoom.mapConfig.url,
         });
         return;
       }
@@ -275,8 +277,9 @@ const initSocket = (io) => {
       // Broadcast match start to ALL clients in the room
       io.to(roomId).emit('match_started', {
         matchId: match.id,
-        mapWidth: GAME.mapWidth,
-        mapHeight: GAME.mapHeight,
+        mapWidth: gameRoom.mapConfig.width,
+        mapHeight: gameRoom.mapConfig.height,
+        mapUrl: gameRoom.mapConfig.url,
       });
 
       logger.gameEvent('match_started', { matchId: match.id, roomId });

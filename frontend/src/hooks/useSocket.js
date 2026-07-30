@@ -68,19 +68,19 @@ export const useSocket = () => {
     });
 
     // Confirmed join — server acknowledged our join_room
-    socket.on('room_joined', ({ roomId, state, mapWidth, mapHeight }) => {
+    socket.on('room_joined', ({ roomId, state, mapWidth, mapHeight, mapUrl }) => {
       console.log('[Socket] room_joined confirmed', { roomId });
-      setMapDimensions(mapWidth, mapHeight);
+      setMapDimensions(mapWidth, mapHeight, mapUrl);
       // Update initial game state (players already in room)
       useGameStore.getState().updateGameState(state);
     });
 
     // Match lifecycle
-    socket.on('match_started', ({ matchId, mapWidth, mapHeight }) => {
+    socket.on('match_started', ({ matchId, mapWidth, mapHeight, mapUrl }) => {
       console.log('[Socket] match_started', { matchId });
       setMatchStatus('playing');
       setMatchId(matchId);
-      setMapDimensions(mapWidth, mapHeight);
+      setMapDimensions(mapWidth, mapHeight, mapUrl);
       toast.success('⚔️ Battle started!', { duration: 2000 });
     });
 

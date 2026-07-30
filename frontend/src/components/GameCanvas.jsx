@@ -1,5 +1,5 @@
 // src/components/GameCanvas.jsx — Canvas 2D game renderer
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import useGameStore from '../store/gameStore';
 import useAuthStore from '../store/authStore';
 
@@ -21,12 +21,23 @@ function getImage(url) {
   return img;
 }
 
-export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joystickRef }) {
+export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapUrl, joystickRef }) {
   const canvasRef = useRef(null);
   const keysRef = useRef(new Set());
   const frameRef = useRef(null);
+  const [mapTheme, setMapTheme] = useState(null);
   const playerSocketId = useGameStore((s) => s.mySocketId);
   const { player: myProfile } = useAuthStore();
+
+  // Fetch map JSON from Blob Storage
+  useEffect(() => {
+    if (mapUrl) {
+      fetch(mapUrl)
+        .then(res => res.json())
+        .then(data => setMapTheme(data.theme))
+        .catch(err => console.error('Failed to load map:', err));
+    }
+  }, [mapUrl]);
 
   // Subscribe to game state directly for rendering
   const getState = () => useGameStore.getState();
@@ -100,11 +111,11 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     const H = canvas.height;
 
     // Background
-    ctx.fillStyle = '#0d1520';
+    ctx.fillStyle = mapTheme?.background || '#0d1520';
     ctx.fillRect(0, 0, W, H);
 
     // Grid pattern
-    ctx.strokeStyle = 'rgba(108,99,255,0.06)';
+    ctx.strokeStyle = mapTheme?.gridColor || 'rgba(108,99,255,0.06)';
     ctx.lineWidth = 1;
     for (let x = 0; x < W; x += 40) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
@@ -114,19 +125,47 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     }
 
     // Map border glow
-    ctx.strokeStyle = 'rgba(108,99,255,0.4)';
+    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(108,99,255,0.4)';
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, W - 2, H - 2);
+
+    // Draw obstacles (cover/walls)
+    if (mapTheme?.obstacles) {
+      ctx.fillStyle = mapTheme.obstacleColor || 'rgba(100, 100, 100, 0.5)';
+      ctx.strokeStyle = mapTheme.obstacleBorder || 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 2;
+      for (const obs of mapTheme.obstacles) {
+        ctx.beginPath();
+        ctx.rect(obs.x, obs.y, obs.w, obs.h);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Diagonal hatch pattern for cover illusion
+        ctx.save();
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 1;
+        for (let i = -obs.h; i < obs.w + obs.h; i += 15) {
+          ctx.beginPath();
+          ctx.moveTo(obs.x + i, obs.y);
+          ctx.lineTo(obs.x + i - obs.h, obs.y + obs.h);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
 
     // Draw particles (collectible dots)
     for (const p of particles) {
       const t = Date.now() / 600;
       const pulse = 1 + 0.2 * Math.sin(t + p.x);
 
+      const color = mapTheme?.particleColor || p.color || '#FFD700';
+
       ctx.save();
-      ctx.shadowColor = p.color || '#FFD700';
+      ctx.shadowColor = color;
       ctx.shadowBlur = 10;
-      ctx.fillStyle = p.color || '#FFD700';
+      ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(p.x, p.y, PARTICLE_RADIUS * pulse, 0, Math.PI * 2);
       ctx.fill();
