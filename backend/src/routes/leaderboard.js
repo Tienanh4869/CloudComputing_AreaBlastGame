@@ -16,26 +16,32 @@ router.get('/', async (req, res, next) => {
       return res.json({ leaderboard: cached, cached: true });
     }
 
-    const leaderboard = await LeaderboardScore.findAll({
-      where: { period },
+    // Query top players directly from Player table
+    const players = await Player.findAll({
+      attributes: ['id', 'nickname', 'avatar_color', 'total_score', 'kills', 'wins'],
       include: [{
-        model: Player,
-        as: 'player',
-        attributes: ['nickname', 'avatar_color', 'kills', 'wins'],
-        include: [{
-          model: User,
-          as: 'user',
-          attributes: ['username'],
-        }],
+        model: User,
+        as: 'user',
+        attributes: ['username'],
       }],
-      order: [['score', 'DESC']],
+      order: [['total_score', 'DESC']],
       limit: parseInt(limit),
     });
 
-    // Update ranks
-    const ranked = leaderboard.map((entry, index) => ({
-      ...entry.toJSON(),
+    // Format to match old leaderboard structure
+    const ranked = players.map((player, index) => ({
+      id: player.id, // Mock leaderboard entry ID
+      period: period,
+      score: player.total_score,
+      kills: player.kills,
       rank: index + 1,
+      player: {
+        nickname: player.nickname,
+        avatar_color: player.avatar_color,
+        kills: player.kills,
+        wins: player.wins,
+        user: player.user
+      }
     }));
 
     // Cache for 5 minutes
