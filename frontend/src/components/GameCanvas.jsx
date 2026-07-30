@@ -32,7 +32,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
   // Fetch map JSON from Blob Storage
   useEffect(() => {
     if (mapUrl) {
-      fetch(mapUrl)
+      // Add timestamp to bypass browser cache
+      fetch(`${mapUrl}?t=${Date.now()}`)
         .then(res => res.json())
         .then(data => setMapTheme(data.theme))
         .catch(err => console.error('Failed to load map:', err));
