@@ -3,7 +3,7 @@
 // For multi-instance scalability: move state to Redis (see SCALABILITY.md)
 
 const { GAME } = require('../config/env');
-const { circleCollide, clampToMap, normalizeMovement, randomMapPosition } = require('./Physics');
+const { circleCollide, circleRectCollide, lineRectCollide, clampToMap, normalizeMovement, randomMapPosition } = require('./Physics');
 const { generateId } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
@@ -12,9 +12,10 @@ const PARTICLE_RADIUS = 8;
 const ATTACK_COOLDOWN = 800;   // ms between attacks
 
 class GameRoom {
-  constructor(roomId, roomCode) {
+  constructor(roomId, roomCode, mapConfig) {
     this.roomId = roomId;
     this.roomCode = roomCode;
+    this.mapConfig = mapConfig;
     this.players = new Map();      // socketId → player state
     this.particles = new Map();    // particleId → particle state
     this.isRunning = false;
@@ -37,7 +38,7 @@ class GameRoom {
 
   _addParticle() {
     const id = generateId();
-    const pos = randomMapPosition(30);
+    const pos = randomMapPosition(this.mapConfig.width, this.mapConfig.height, 30);
     this.particles.set(id, {
       id,
       x: pos.x,
@@ -85,7 +86,7 @@ class GameRoom {
   // ── Player Management ────────────────────────────────────────
 
   addPlayer(socketId, playerData) {
-    const pos = randomMapPosition(60);
+    const pos = randomMapPosition(this.mapConfig.width, this.mapConfig.height, 60);
     const player = {
       socketId,
       playerId: playerData.playerId,
@@ -162,6 +163,19 @@ class GameRoom {
       const dynamicAttackRange = GAME.attackRange + (attacker.radius - 16) * 1.5;
 
       if (dist <= dynamicAttackRange) {
+        // Check line of sight (cover/hiding)
+        let hasLoS = true;
+        if (this.mapConfig.theme?.obstacles) {
+          for (const obs of this.mapConfig.theme.obstacles) {
+            if (lineRectCollide(attacker.x, attacker.y, target.x, target.y, obs)) {
+              hasLoS = false;
+              break;
+            }
+          }
+        }
+
+        if (!hasLoS) continue; // Attack blocked by obstacle!
+
         target.hp -= GAME.attackDamage;
 
         const event = { attacker: attacker.nickname, target: target.nickname, damage: GAME.attackDamage };
@@ -203,7 +217,7 @@ class GameRoom {
   _respawnPlayer(socketId) {
     const player = this.players.get(socketId);
     if (!player) return;
-    const pos = randomMapPosition(60);
+    const pos = randomMapPosition(this.mapConfig.width, this.mapConfig.height, 60);
     player.x = pos.x;
     player.y = pos.y;
     player.hp = GAME.playerHp;
@@ -228,10 +242,21 @@ class GameRoom {
       // Cứ mỗi 50 điểm sẽ bự lên từ từ thêm 5 đơn vị radius (rất mượt mà)
       player.radius = 16 + Math.min((player.score / 50) * 5, 40);
 
-      const newPos = clampToMap({
+      let newPos = clampToMap({
         x: player.x + player.dx,
         y: player.y + player.dy,
-      }, player.radius);
+      }, this.mapConfig.width, this.mapConfig.height, player.radius);
+
+      // Check collision with obstacles
+      if (this.mapConfig.theme?.obstacles) {
+        for (const obs of this.mapConfig.theme.obstacles) {
+          if (circleRectCollide({ x: newPos.x, y: newPos.y, radius: player.radius }, obs)) {
+            // Collision detected! Revert to old position
+            newPos = { x: player.x, y: player.y };
+            break;
+          }
+        }
+      }
 
       player.x = newPos.x;
       player.y = newPos.y;
@@ -273,6 +298,7 @@ class GameRoom {
   getState() {
     return {
       roomId: this.roomId,
+      mapUrl: this.mapConfig.url,
       players: Array.from(this.players.values()).map((p) => ({
         socketId: p.socketId,
         playerId: p.playerId,

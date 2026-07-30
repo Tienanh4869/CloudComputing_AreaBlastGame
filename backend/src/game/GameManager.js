@@ -10,9 +10,26 @@ const GameManager = {
   /**
    * Create or return existing game room.
    */
-  getOrCreate(roomId, roomCode) {
+  async getOrCreate(roomId, roomCode) {
     if (!activeRooms.has(roomId)) {
-      const room = new GameRoom(roomId, roomCode);
+      // Fetch dynamic map from Azure Blob Storage (CDN)
+      const maps = ['ice_map.json', 'fire_map.json'];
+      const randomMap = maps[Math.floor(Math.random() * maps.length)];
+      const mapUrl = `https://arenablaststore13178.blob.core.windows.net/arenablast-maps/${randomMap}`;
+      
+      let mapConfig = { width: 1200, height: 800, url: mapUrl, theme: null };
+      try {
+        const response = await fetch(mapUrl);
+        if (response.ok) {
+          const data = await response.json();
+          mapConfig = { ...mapConfig, ...data, url: mapUrl };
+          logger.info(`[GameManager] Loaded map ${randomMap} for room ${roomId}`);
+        }
+      } catch (err) {
+        logger.warn(`[GameManager] Failed to fetch map JSON, using fallback`, err.message);
+      }
+
+      const room = new GameRoom(roomId, roomCode, mapConfig);
       activeRooms.set(roomId, room);
       logger.info('[GameManager] Room created', { roomId });
     }
