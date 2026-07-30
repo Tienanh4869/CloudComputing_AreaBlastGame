@@ -1,5 +1,7 @@
 // src/config/env.js — Centralized environment config with validation
 require('dotenv').config();
+const { DefaultAzureCredential } = require('@azure/identity');
+const { SecretClient } = require('@azure/keyvault-secrets');
 
 const required = (key) => {
   const val = process.env[key];
@@ -9,7 +11,7 @@ const required = (key) => {
   return val;
 };
 
-module.exports = {
+const config = {
   // Server
   PORT: parseInt(process.env.PORT) || 3001,
   NODE_ENV: process.env.NODE_ENV || 'development',
@@ -57,3 +59,40 @@ module.exports = {
   // Azure Storage
   AZURE_STORAGE_CONNECTION_STRING: process.env.AZURE_STORAGE_CONNECTION_STRING || null,
 };
+
+config.loadKeyVaultSecrets = async () => {
+  const vaultName = process.env.AZURE_KEY_VAULT_NAME;
+  if (!vaultName) {
+    console.log('[KeyVault] AZURE_KEY_VAULT_NAME is not set, skipping Key Vault integration.');
+    return;
+  }
+  
+  const url = `https://${vaultName}.vault.azure.net`;
+  console.log(`[KeyVault] Connecting to ${url}...`);
+  try {
+    const credential = new DefaultAzureCredential();
+    const client = new SecretClient(url, credential);
+    
+    const dbPassSecret = await client.getSecret('DB-PASSWORD').catch(() => null);
+    if (dbPassSecret && dbPassSecret.value) {
+      config.DB.password = dbPassSecret.value;
+      console.log('[KeyVault] Successfully loaded DB-PASSWORD');
+    }
+
+    const redisPassSecret = await client.getSecret('REDIS-PASSWORD').catch(() => null);
+    if (redisPassSecret && redisPassSecret.value) {
+      config.REDIS.password = redisPassSecret.value;
+      console.log('[KeyVault] Successfully loaded REDIS-PASSWORD');
+    }
+    
+    const blobSecret = await client.getSecret('AZURE-STORAGE-CONNECTION-STRING').catch(() => null);
+    if (blobSecret && blobSecret.value) {
+      config.AZURE_STORAGE_CONNECTION_STRING = blobSecret.value;
+      console.log('[KeyVault] Successfully loaded AZURE-STORAGE-CONNECTION-STRING');
+    }
+  } catch (err) {
+    console.error('[KeyVault] Error loading secrets:', err.message);
+  }
+};
+
+module.exports = config;

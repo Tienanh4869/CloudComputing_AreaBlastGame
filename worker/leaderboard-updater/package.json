@@ -1,0 +1,14 @@
+{
+  "name": "leaderboard-updater",
+  "version": "1.0.0",
+  "description": "Azure Function to update leaderboard stats asynchronously",
+  "main": "index.js",
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"No tests yet...\""
+  },
+  "dependencies": {
+    "@azure/functions": "^4.0.0",
+    "pg": "^8.11.3"
+  }
+}

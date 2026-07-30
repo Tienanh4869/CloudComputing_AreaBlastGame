@@ -369,6 +369,26 @@ const initSocket = (io) => {
 
       await Room.update({ status: 'finished' }, { where: { id: roomId } });
 
+      // Gọi Azure Function (Serverless) để tính toán bảng xếp hạng bất đồng bộ
+      // Thay vì tính ở đây gây block game server
+      if (process.env.LEADERBOARD_UPDATER_URL) {
+        for (const ranking of results.rankings) {
+          try {
+            fetch(process.env.LEADERBOARD_UPDATER_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                event: 'match_ended',
+                playerId: ranking.playerId,
+                score: ranking.score,
+                kills: ranking.kills
+              })
+            }).catch(e => logger.warn('[Serverless] Lỗi gọi Azure Function:', e.message));
+          } catch (e) {}
+        }
+        logger.info('[Serverless] Đã gửi tín hiệu cập nhật Leaderboard sang Azure Function');
+      }
+
       // Notify clients
       io.to(roomId).emit('match_ended', {
         results: results.rankings,
