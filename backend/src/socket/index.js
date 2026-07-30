@@ -74,7 +74,21 @@ const initSocket = (io) => {
         socket.join(roomId);
         socket.currentRoomId = roomId;
 
-        // Prevent same account from playing against itself in the same room
+        // Check if THIS socket is already in the room (e.g. duplicate join request from spamming click)
+        if (gameRoom.players.has(socket.id)) {
+          // Just resend the state and return gracefully
+          socket.emit('room_joined', {
+            roomId: roomCode || room.code,
+            state: gameRoom.getState(),
+            mapWidth: gameRoom.mapConfig.width,
+            mapHeight: gameRoom.mapConfig.height,
+            mapUrl: gameRoom.mapConfig.url,
+            mapTheme: gameRoom.mapConfig.theme,
+          });
+          return;
+        }
+
+        // Prevent same account from playing against itself from ANOTHER tab/browser
         if (socket.playerId) {
           const isAlreadyInRoom = Array.from(gameRoom.players.values()).some(p => p.playerId === socket.playerId);
           if (isAlreadyInRoom) {
