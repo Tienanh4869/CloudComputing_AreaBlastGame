@@ -25,20 +25,18 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
   const canvasRef = useRef(null);
   const keysRef = useRef(new Set());
   const frameRef = useRef(null);
-  const [mapTheme, setMapTheme] = useState(null);
+  const { roomId, mapTheme, particles, players, matchStatus } = useGameStore(s => ({
+    roomId: s.roomId,
+    mapTheme: s.mapTheme,
+    particles: s.particles,
+    players: s.players,
+    matchStatus: s.matchStatus,
+  }));
   const playerSocketId = useGameStore((s) => s.mySocketId);
   const { player: myProfile } = useAuthStore();
 
-  // Fetch map JSON from Blob Storage
-  useEffect(() => {
-    if (mapUrl) {
-      // Add timestamp to bypass browser cache
-      fetch(`${mapUrl}?t=${Date.now()}`)
-        .then(res => res.json())
-        .then(data => setMapTheme(data.theme))
-        .catch(err => console.error('Failed to load map:', err));
-    }
-  }, [mapUrl]);
+  // No longer fetching mapTheme from Blob Storage on frontend.
+  // We use mapTheme received from backend via socket.
 
   // Subscribe to game state directly for rendering
   const getState = () => useGameStore.getState();
