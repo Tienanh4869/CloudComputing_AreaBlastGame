@@ -6,9 +6,10 @@ const logger = require('../utils/logger');
 let redisClient = null;
 
 const connectRedis = async () => {
+  const protocol = REDIS.port === 6380 ? 'rediss' : 'redis';
   const url = REDIS.password
-    ? `redis://:${REDIS.password}@${REDIS.host}:${REDIS.port}`
-    : `redis://${REDIS.host}:${REDIS.port}`;
+    ? `${protocol}://:${REDIS.password}@${REDIS.host}:${REDIS.port}`
+    : `${protocol}://${REDIS.host}:${REDIS.port}`;
 
   redisClient = createClient({ 
     url,
