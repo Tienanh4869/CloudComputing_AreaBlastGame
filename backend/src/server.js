@@ -2,14 +2,20 @@
 const http = require('http');
 const { Server: SocketServer } = require('socket.io');
 const app = require('./app');
-const { connectDB, sequelize } = require('./config/database');
 const { connectRedis } = require('./config/redis');
 const { initSocket } = require('./socket');
-const { PORT, CORS_ORIGIN, NODE_ENV } = require('./config/env');
+const env = require('./config/env');
+const { PORT, CORS_ORIGIN, NODE_ENV } = env;
 const logger = require('./utils/logger');
 
 async function bootstrap() {
-  // 1. Connect to PostgreSQL
+  // 0. Load Azure Key Vault secrets (if configured) before DB connection
+  if (env.loadKeyVaultSecrets) {
+    await env.loadKeyVaultSecrets();
+  }
+
+  // 1. Connect to PostgreSQL (must be required AFTER secrets are loaded)
+  const { connectDB, sequelize } = require('./config/database');
   await connectDB();
 
   // 2. Sync DB models (alter: safe for dev, use migrations in prod)
