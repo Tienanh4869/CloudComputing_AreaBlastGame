@@ -97,11 +97,12 @@ const initSocket = (io) => {
 
         // Send current state to the newly joined player
         socket.emit('room_joined', {
-          roomId,
+          roomId: roomCode,
           state: gameRoom.getState(),
           mapWidth: gameRoom.mapConfig.width,
           mapHeight: gameRoom.mapConfig.height,
           mapUrl: gameRoom.mapConfig.url,
+          mapTheme: gameRoom.mapConfig.theme,
         });
 
         logger.gameEvent('player_joined_room', {
@@ -136,6 +137,7 @@ const initSocket = (io) => {
           mapWidth: gameRoom.mapConfig.width,
           mapHeight: gameRoom.mapConfig.height,
           mapUrl: gameRoom.mapConfig.url,
+          mapTheme: gameRoom.mapConfig.theme,
         });
         return;
       }
@@ -280,6 +282,7 @@ const initSocket = (io) => {
         mapWidth: gameRoom.mapConfig.width,
         mapHeight: gameRoom.mapConfig.height,
         mapUrl: gameRoom.mapConfig.url,
+        mapTheme: gameRoom.mapConfig.theme,
       });
 
       logger.gameEvent('match_started', { matchId: match.id, roomId });

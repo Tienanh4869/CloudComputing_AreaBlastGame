@@ -44,7 +44,7 @@ const useGameStore = create((set, get) => ({
 
   setMatchId: (id) => set({ matchId: id }),
 
-  setMapDimensions: (width, height, url) => set({ mapWidth: width, mapHeight: height, mapUrl: url }),
+  setMapDimensions: (width, height, url, theme) => set({ mapWidth: width, mapHeight: height, mapUrl: url, mapTheme: theme }),
 
   // Called on every game_state tick from server
   updateGameState: (state) => {
