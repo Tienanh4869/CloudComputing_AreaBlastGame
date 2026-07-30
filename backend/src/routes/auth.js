@@ -176,27 +176,8 @@ router.post('/upload', async (req, res, next) => {
         await blockBlobClient.uploadData(data, {
           blobHTTPHeaders: { blobContentType: `image/${extension}` }
         });
-        // Generate a SAS URL valid for 10 years so the image is publicly accessible
-        const expiresOn = new Date();
-        expiresOn.setFullYear(expiresOn.getFullYear() + 10);
-        const { generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
-        const url = new URL(ENV.AZURE_STORAGE_CONNECTION_STRING.split(';').reduce((acc, part) => {
-          const [k, ...v] = part.split('='); acc[k] = v.join('='); return acc;
-        }, {}), '');
-        const accountName = ENV.AZURE_STORAGE_CONNECTION_STRING.match(/AccountName=([^;]+)/)?.[1];
-        const accountKey = ENV.AZURE_STORAGE_CONNECTION_STRING.match(/AccountKey=([^;]+)/)?.[1];
-        if (accountName && accountKey) {
-          const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
-          const sasToken = generateBlobSASQueryParameters({
-            containerName: 'arenablast-uploads',
-            blobName: fileName,
-            permissions: BlobSASPermissions.parse('r'),
-            expiresOn,
-          }, sharedKeyCredential).toString();
-          fileUrl = `${blockBlobClient.url}?${sasToken}`;
-        } else {
-          fileUrl = blockBlobClient.url;
-        }
+        // Trả về trực tiếp đường link Public của ảnh trên Azure
+        fileUrl = blockBlobClient.url;
         logger.info('[Upload] File uploaded to Azure Blob', { fileName });
       } catch (azureErr) {
         logger.error('[Upload] Azure Blob upload failed', azureErr);
