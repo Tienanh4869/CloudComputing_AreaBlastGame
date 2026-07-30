@@ -58,12 +58,21 @@ const initSocket = (io) => {
           return socket.emit('error', { message: 'Room is full' });
         }
 
-        // Join Socket.IO room
+        // Mark this as the latest room the socket wants to join
+        socket.latestRequestedRoomId = roomId;
+
+        // Get or create in-memory game room (this is async and may take time)
+        const gameRoom = await GameManager.getOrCreate(roomId, roomCode || room.code);
+
+        // If the user clicked join on ANOTHER room while we were waiting, ABORT this stale request!
+        if (socket.latestRequestedRoomId !== roomId) {
+          logger.warn(`[Socket] Aborted stale join_room for ${roomId} because user moved to ${socket.latestRequestedRoomId}`);
+          return;
+        }
+
+        // Join Socket.IO room ONLY after we confirm this is still the requested room
         socket.join(roomId);
         socket.currentRoomId = roomId;
-
-        // Get or create in-memory game room
-        const gameRoom = await GameManager.getOrCreate(roomId, roomCode || room.code);
 
         // Prevent same account from playing against itself in the same room
         if (socket.playerId) {
