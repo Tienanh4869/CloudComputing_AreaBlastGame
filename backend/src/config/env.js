@@ -3,6 +3,12 @@ require('dotenv').config();
 const { DefaultAzureCredential } = require('@azure/identity');
 const { SecretClient } = require('@azure/keyvault-secrets');
 
+const thresholdFromEnv = (key, fallback) => {
+  const value = Number.parseFloat(process.env[key]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(value, 0), 1);
+};
+
 const required = (key) => {
   const val = process.env[key];
   if (!val) {
@@ -59,6 +65,14 @@ const config = {
   // Azure Storage
   AZURE_STORAGE_CONNECTION_STRING: process.env.AZURE_STORAGE_CONNECTION_STRING || null,
 
+  // Azure Computer Vision image moderation
+  AZURE_VISION_ENDPOINT: process.env.AZURE_VISION_ENDPOINT || null,
+  AZURE_VISION_KEY: process.env.AZURE_VISION_KEY || null,
+  AZURE_VISION_MODERATION_ENABLED: process.env.AZURE_VISION_MODERATION_ENABLED === 'true',
+  AZURE_VISION_ADULT_THRESHOLD: thresholdFromEnv('AZURE_VISION_ADULT_THRESHOLD', 0.6),
+  AZURE_VISION_RACY_THRESHOLD: thresholdFromEnv('AZURE_VISION_RACY_THRESHOLD', 0.7),
+  AZURE_VISION_GORE_THRESHOLD: thresholdFromEnv('AZURE_VISION_GORE_THRESHOLD', 0.6),
+
   // Azure Service Bus
   SERVICE_BUS_CONNECTION_STRING: process.env.SERVICE_BUS_CONNECTION_STRING || null,
 };
@@ -92,6 +106,12 @@ config.loadKeyVaultSecrets = async () => {
     if (blobSecret && blobSecret.value) {
       config.AZURE_STORAGE_CONNECTION_STRING = blobSecret.value;
       console.log('[KeyVault] Successfully loaded AZURE-STORAGE-CONNECTION-STRING');
+    }
+
+    const visionKeySecret = await client.getSecret('AZURE-VISION-KEY').catch(() => null);
+    if (visionKeySecret && visionKeySecret.value) {
+      config.AZURE_VISION_KEY = visionKeySecret.value;
+      console.log('[KeyVault] Successfully loaded AZURE-VISION-KEY');
     }
 
     const sbSecret = await client.getSecret('SERVICE-BUS-CONNECTION-STRING').catch(() => null);
