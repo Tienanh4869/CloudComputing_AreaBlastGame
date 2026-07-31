@@ -145,7 +145,7 @@ class GameRoom {
 
   playerAttack(socketId) {
     const attacker = this.players.get(socketId);
-    if (!attacker || !attacker.alive) return null;
+    if (!attacker || !attacker.alive || attacker.respawning) return null;
 
     const now = Date.now();
     if (now - attacker.lastAttack < ATTACK_COOLDOWN) return null;
@@ -154,7 +154,7 @@ class GameRoom {
     // Return empty array instead of null so caller knows attack happened (even if no hit)
     const hits = [];
     for (const [sid, target] of this.players) {
-      if (sid === socketId || !target.alive) continue;
+      if (sid === socketId || !target.alive || target.respawning) continue;
 
       const dist = Math.sqrt(
         Math.pow(attacker.x - target.x, 2) + Math.pow(attacker.y - target.y, 2)
@@ -201,8 +201,9 @@ class GameRoom {
           });
           logger.gameEvent('player_killed', { killer: attacker.nickname, victim: target.nickname });
 
-          // Respawn after 3 seconds
-          setTimeout(() => this._respawnPlayer(sid), 3000);
+          // Respawn after 3 seconds instead of dying completely
+          target.respawning = true;
+          target.respawnTimer = 3;
         } else {
           this._logEvent('player_hit', { playerId: target.playerId, damage: GAME.attackDamage });
         }
@@ -230,16 +231,62 @@ class GameRoom {
   tick() {
     if (!this.isRunning) return;
 
+    this.tickCount++;
+    const now = Date.now();
+
+    // Calculate Safe Zone
+    let safeZoneRadius = this.maxSafeZoneRadius;
+    if (this.startedAt) {
+      const progress = (now - this.startedAt) / this.matchDuration;
+      safeZoneRadius = Math.max(0, this.maxSafeZoneRadius * (1 - progress));
+    }
+    const cx = this.mapConfig.width / 2;
+    const cy = this.mapConfig.height / 2;
+
     // Move all alive players
     for (const player of this.players.values()) {
       if (!player.alive) continue;
 
-      // Tự động hồi máu (Auto health regeneration) - Hồi 0.1 HP mỗi tick, không vượt quá maxHp
+      if (player.respawning) {
+        // Handle Respawn countdown
+        if (this.tickCount % 30 === 0) {
+          player.respawnTimer--;
+          if (player.respawnTimer <= 0) {
+            player.respawning = false;
+            const pos = randomMapPosition(this.mapConfig.width, this.mapConfig.height, 60);
+            player.x = pos.x;
+            player.y = pos.y;
+            player.hp = GAME.playerHp;
+            logger.gameEvent('player_respawned', { nickname: player.nickname });
+          }
+        }
+        continue;
+      }
+
+      // Safe zone damage (every 1 second = 30 ticks)
+      if (this.tickCount % 30 === 0) {
+        const distToCenter = Math.sqrt(Math.pow(player.x - cx, 2) + Math.pow(player.y - cy, 2));
+        if (distToCenter > safeZoneRadius) {
+          player.hp -= 10;
+          if (player.hp <= 0) {
+            player.hp = 0;
+            player.deaths++;
+            player.respawning = true;
+            player.respawnTimer = 3;
+            this._dropLoot(player.x, player.y, player.score);
+            player.score = 0;
+            this._logEvent('player_died_zone', { playerId: player.playerId, nickname: player.nickname });
+          }
+        }
+      }
+
+      if (player.respawning) continue; // died to zone
+
+      // Auto health regeneration
       if (player.hp < player.maxHp) {
         player.hp = Math.min(player.maxHp, player.hp + 0.1);
       }
 
-      // Cứ mỗi 50 điểm sẽ bự lên từ từ thêm 5 đơn vị radius (rất mượt mà)
       player.radius = 16 + Math.min((player.score / 50) * 5, 40);
 
       let newPos = clampToMap({
@@ -251,7 +298,6 @@ class GameRoom {
       if (this.mapConfig.theme?.obstacles) {
         for (const obs of this.mapConfig.theme.obstacles) {
           if (circleRectCollide({ x: newPos.x, y: newPos.y, radius: player.radius }, obs)) {
-            // Collision detected! Revert to old position
             newPos = { x: player.x, y: player.y };
             break;
           }
@@ -260,6 +306,18 @@ class GameRoom {
 
       player.x = newPos.x;
       player.y = newPos.y;
+
+      // Update Bushes logic
+      player.inBushId = null;
+      if (this.mapConfig.theme?.bushes) {
+        for (let i = 0; i < this.mapConfig.theme.bushes.length; i++) {
+          const bush = this.mapConfig.theme.bushes[i];
+          if (circleRectCollide({ x: player.x, y: player.y, radius: player.radius }, bush)) {
+            player.inBushId = i;
+            break;
+          }
+        }
+      }
     }
 
     // Check particle collisions
@@ -296,10 +354,32 @@ class GameRoom {
   // ── State Snapshot ───────────────────────────────────────────
 
   getState() {
-    return {
-      roomId: this.roomId,
-      mapUrl: this.mapConfig.url,
-      players: Array.from(this.players.values()).map((p) => ({
+    // Fallback for logic that doesn't need per-player fog of war
+    return this.getStateFor(null);
+  }
+
+  getStateFor(viewerSocketId) {
+    const viewer = viewerSocketId ? this.players.get(viewerSocketId) : null;
+    
+    // Calculate current safe zone
+    let safeZoneRadius = this.maxSafeZoneRadius;
+    const now = Date.now();
+    if (this.startedAt) {
+      const progress = (now - this.startedAt) / this.matchDuration;
+      safeZoneRadius = Math.max(0, this.maxSafeZoneRadius * (1 - progress));
+    }
+    const cx = this.mapConfig.width / 2;
+    const cy = this.mapConfig.height / 2;
+
+    const playersArray = Array.from(this.players.values())
+      .filter(p => {
+        if (!viewer) return true;
+        if (p.socketId === viewerSocketId) return true; // always see self
+        // Fog of war: hide if in a different bush
+        if (p.inBushId !== null && p.inBushId !== viewer.inBushId) return false;
+        return true;
+      })
+      .map((p) => ({
         socketId: p.socketId,
         playerId: p.playerId,
         nickname: p.nickname,
@@ -311,14 +391,25 @@ class GameRoom {
         score: p.score,
         kills: p.kills,
         alive: p.alive,
+        respawning: p.respawning,
+        respawnTimer: p.respawnTimer,
         avatarUrl: p.avatarUrl,
         weaponUrl: p.weaponUrl,
         facingX: p.facingX,
         facingY: p.facingY,
         radius: p.radius,
-      })),
+        inBushId: p.inBushId,
+      }));
+
+    return {
+      roomId: this.roomId,
+      mapUrl: this.mapConfig.url,
+      players: playersArray,
       particles: Array.from(this.particles.values()),
-      timestamp: Date.now(),
+      safeZone: { x: cx, y: cy, radius: safeZoneRadius },
+      startTime: this.startedAt,
+      matchDuration: this.matchDuration,
+      timestamp: now,
     };
   }
 
@@ -328,6 +419,10 @@ class GameRoom {
     this.matchId = matchId;
     this.isRunning = true;
     this.startedAt = Date.now();
+    this.matchDuration = 120 * 1000; // 2 minutes
+    this.maxSafeZoneRadius = Math.max(this.mapConfig.width, this.mapConfig.height) / 1.5;
+    this.tickCount = 0;
+    
     this._logEvent('match_started', { matchId });
     logger.gameEvent('match_started', { roomId: this.roomId, matchId });
   }

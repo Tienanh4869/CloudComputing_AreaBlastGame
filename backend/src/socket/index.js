@@ -317,24 +317,29 @@ const initSocket = (io) => {
 
         const { collected } = gameRoom.tick();
 
-        // Broadcast full game state to all players
-        const state = gameRoom.getState();
-        io.to(roomId).emit('game_state', state);
+        // Broadcast full game state to all players individually (for Fog of War / Bushes)
+        for (const player of gameRoom.players.values()) {
+          io.to(player.socketId).emit('game_state', gameRoom.getStateFor(player.socketId));
+        }
 
         // Emit particle collection events
         if (collected && collected.length > 0) {
           io.to(roomId).emit('particles_collected', collected);
-          // Broadcast leaderboard update
-          const scores = state.players
+        }
+
+        // Leaderboard broadcast logic
+        gameRoom.leaderboardTick = (gameRoom.leaderboardTick || 0) + 1;
+        if (gameRoom.leaderboardTick >= GAME.tickRate * 2) {
+          gameRoom.leaderboardTick = 0;
+          const scores = Array.from(gameRoom.players.values())
             .sort((a, b) => b.score - a.score)
-            .slice(0, 10)
             .map((p, i) => ({ rank: i + 1, nickname: p.nickname, score: p.score, kills: p.kills }));
           io.to(roomId).emit('leaderboard_update', { scores });
         }
       }, tickMs);
 
-      // Auto-end match after 3 minutes
-      setTimeout(() => endMatch(io, roomId, gameRoom), 3 * 60 * 1000);
+      // Auto-end match after 2 minutes
+      setTimeout(() => endMatch(io, roomId, gameRoom), 2 * 60 * 1000);
 
     } catch (err) {
       logger.error('[Socket] startMatch error:', err.message, err.stack);
