@@ -36,7 +36,7 @@ export default function RegisterPage() {
           setForm((f) => ({ ...f, [type]: data.url }));
           toast.success('Image uploaded!');
         } catch (err) {
-          toast.error('Failed to upload image');
+          toast.error(err.response?.data?.error || 'Failed to upload image');
         } finally {
           setLoading(false);
         }

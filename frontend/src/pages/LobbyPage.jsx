@@ -210,7 +210,7 @@ export default function LobbyPage() {
           setProfileForm((f) => ({ ...f, [type]: data.url }));
           toast.success('Image uploaded! Click Save to apply.');
         } catch (err) {
-          toast.error('Failed to upload image');
+          toast.error(err.response?.data?.error || 'Failed to upload image');
         } finally {
           setUpdatingProfile(false);
         }

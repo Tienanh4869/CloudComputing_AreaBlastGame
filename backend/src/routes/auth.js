@@ -9,6 +9,15 @@ const { signToken, authenticate } = require('../middleware/auth');
 const logger = require('../utils/logger');
 const { BlobServiceClient } = require('@azure/storage-blob');
 const ENV = require('../config/env');
+const { moderateImage } = require('../services/imageModeration');
+
+const ALLOWED_UPLOAD_TYPES = new Set(['avatar_url', 'weapon_url']);
+const IMAGE_FORMATS = {
+  jpeg: { contentType: 'image/jpeg', extension: 'jpg' },
+  jpg: { contentType: 'image/jpeg', extension: 'jpg' },
+  png: { contentType: 'image/png', extension: 'png' },
+  webp: { contentType: 'image/webp', extension: 'webp' },
+};
 
 // Input validation rules
 const registerRules = [
@@ -145,6 +154,9 @@ router.post('/upload', async (req, res, next) => {
   try {
     const { imageBase64, type } = req.body;
     if (!imageBase64) return res.status(400).json({ error: 'Missing imageBase64 data' });
+    if (!ALLOWED_UPLOAD_TYPES.has(type)) {
+      return res.status(400).json({ error: 'Invalid upload type' });
+    }
 
     // Ensure it's an image
     const matches = imageBase64.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
@@ -152,7 +164,11 @@ router.post('/upload', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid base64 image data string' });
     }
 
-    const extension = matches[1];
+    const imageFormat = IMAGE_FORMATS[matches[1].toLowerCase()];
+    if (!imageFormat) {
+      return res.status(400).json({ error: 'Only JPG, PNG and WebP images are supported' });
+    }
+
     const data = Buffer.from(matches[2], 'base64');
     
     // File size check (e.g., 2MB)
@@ -160,7 +176,38 @@ router.post('/upload', async (req, res, next) => {
       return res.status(400).json({ error: 'File size exceeds 2MB limit' });
     }
 
-    const fileName = `${generateId()}.${extension}`;
+    let moderation;
+    try {
+      moderation = await moderateImage(data, imageFormat.contentType);
+    } catch (moderationErr) {
+      logger.error('[Upload] Image moderation unavailable', {
+        code: moderationErr.code,
+        message: moderationErr.message,
+      });
+      return res.status(503).json({
+        code: 'MODERATION_UNAVAILABLE',
+        error: 'Image moderation is temporarily unavailable. Please try again.',
+      });
+    }
+
+    if (!moderation.safe) {
+      logger.warn('[Upload] Image rejected by Azure Computer Vision', {
+        type,
+        reasons: moderation.reasons,
+        scores: moderation.scores,
+      });
+      return res.status(422).json({
+        code: 'UNSAFE_IMAGE',
+        error: 'This image does not meet the ArenaBlast community guidelines.',
+        moderation: {
+          provider: moderation.provider,
+          reasons: moderation.reasons,
+          scores: moderation.scores,
+        },
+      });
+    }
+
+    const fileName = `${generateId()}.${imageFormat.extension}`;
     
     // Azure Blob Storage Fallback Logic
     let fileUrl = '';
@@ -174,7 +221,7 @@ router.post('/upload', async (req, res, next) => {
         const blockBlobClient = containerClient.getBlockBlobClient(fileName);
         // Upload data with correct content type
         await blockBlobClient.uploadData(data, {
-          blobHTTPHeaders: { blobContentType: `image/${extension}` }
+          blobHTTPHeaders: { blobContentType: imageFormat.contentType }
         });
         // Trả về trực tiếp đường link Public của ảnh trên Azure
         fileUrl = blockBlobClient.url;
@@ -193,7 +240,14 @@ router.post('/upload', async (req, res, next) => {
       logger.info('[Upload] File saved locally (Fallback)', { fileName });
     }
 
-    res.json({ url: fileUrl });
+    res.json({
+      url: fileUrl,
+      moderation: {
+        checked: moderation.checked,
+        safe: true,
+        provider: moderation.provider,
+      },
+    });
   } catch (err) { next(err); }
 });
 
