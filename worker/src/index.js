@@ -47,7 +47,8 @@ function getQuestUpdate(event) {
                 questCode: 'DAILY_LOGIN',
                 amount: 1,
                 target: 1,
-                unit: 'times'
+                unit: 'times',
+                reward: 100
             };
 
         case 'PLAYER_KILL':
@@ -55,7 +56,8 @@ function getQuestUpdate(event) {
                 questCode: 'DAILY_KILL_5',
                 amount: 1,
                 target: 5,
-                unit: 'kills'
+                unit: 'kills',
+                reward: 200
             };
 
         case 'PLAYTIME_RECORDED':
@@ -66,12 +68,69 @@ function getQuestUpdate(event) {
                     Math.floor(Number(event.durationSeconds) || 0)
                 ),
                 target: 1800,
-                unit: 'seconds'
+                unit: 'seconds',
+                reward: 300
             };
 
         default:
             return null;
     }
+}
+async function grantQuestReward(
+    client,
+    event,
+    questDate,
+    quest,
+    context
+) {
+    const rewardEventId =
+        `QUEST_REWARD:${event.playerId}:${questDate}:${quest.questCode}`;
+
+    const rewardResult = await client.query(
+        `
+            INSERT INTO processed_events (
+                event_id,
+                event_type,
+                processed_at
+            )
+            VALUES ($1, 'QUEST_REWARD', NOW())
+            ON CONFLICT (event_id)
+            DO NOTHING
+            RETURNING event_id
+        `,
+        [rewardEventId]
+    );
+
+    if (rewardResult.rowCount === 0) {
+        return false;
+    }
+
+    const playerResult = await client.query(
+        `
+            UPDATE players
+            SET
+                total_score = COALESCE(total_score, 0) + $1,
+                updated_at = NOW()
+            WHERE id = $2
+            RETURNING total_score
+        `,
+        [
+            quest.reward,
+            event.playerId
+        ]
+    );
+
+    if (playerResult.rowCount === 0) {
+        throw new Error(
+            `Player ${event.playerId} not found when granting quest reward`
+        );
+    }
+
+    context.log(
+        `[DailyQuest] Đã thưởng ${quest.reward} điểm cho Player ${event.playerId}`
+    );
+
+    return true;
 }
 if (process.env.SERVICE_BUS_CONNECTION_STRING) {
 app.serviceBusQueue('matchResultsProcessor', {
@@ -290,16 +349,41 @@ app.serviceBusQueue('dailyQuestProcessor', {
                 ]
             );
 
-            if (processedResult.rowCount === 0) {
-                await client.query('COMMIT');
+if (processedResult.rowCount === 0) {
+    const existingQuestResult = await client.query(
+        `
+            SELECT completed
+            FROM daily_quest_progress
+            WHERE player_id = $1
+              AND quest_date = $2
+              AND quest_code = $3
+        `,
+        [
+            event.playerId,
+            questDate,
+            quest.questCode
+        ]
+    );
+
+            if (existingQuestResult.rows[0]?.completed === true) {
+                await grantQuestReward(
+                    client,
+                    event,
+                    questDate,
+                    quest,
+                    context
+                );
+            }
+
+            await client.query('COMMIT');
 
                 context.log(
                     `[DailyQuest] Sự kiện ${event.eventId} đã được xử lý trước đó`
                 );
                 return;
-            }
+}
 
-            await client.query(
+            const questResult = await client.query(
                 `
                     INSERT INTO daily_quest_progress (
                         id,
@@ -360,6 +444,7 @@ app.serviceBusQueue('dailyQuestProcessor', {
                             ELSE daily_quest_progress.completed_at
                         END,
                         updated_at = NOW()
+                        RETURNING completed
                 `,
                 [
                     randomUUID(),
@@ -372,7 +457,15 @@ app.serviceBusQueue('dailyQuestProcessor', {
                     initiallyCompleted
                 ]
             );
-
+        if (questResult.rows[0]?.completed === true) {
+            await grantQuestReward(
+                client,
+                event,
+                questDate,
+                quest,
+                context
+            );
+        }
             await client.query('COMMIT');
 
             context.log(

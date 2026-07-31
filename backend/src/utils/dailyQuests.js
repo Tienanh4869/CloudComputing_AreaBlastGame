@@ -4,18 +4,21 @@ const QUEST_DEFINITIONS = [
     title: 'Đăng nhập mỗi ngày',
     target: 1,
     unit: 'times',
+    reward: 100,
   },
   {
     code: 'DAILY_KILL_5',
     title: 'Tiêu diệt 5 đối thủ',
     target: 5,
     unit: 'kills',
+    reward: 200,
   },
   {
     code: 'DAILY_PLAY_30_MIN',
     title: 'Chơi trong 30 phút',
     target: 1800,
     unit: 'seconds',
+    reward: 300,
   },
 ];
 

@@ -83,14 +83,7 @@ export default function DailyQuestPanel() {
           🎯 Nhiệm vụ hằng ngày
         </h3>
 
-        <span
-          style={{
-            color: 'var(--text-muted)',
-            fontSize: '0.75rem',
-          }}
-        >
-          Tự cập nhật
-        </span>
+
       </div>
 
       {loading ? (
@@ -157,19 +150,37 @@ export default function DailyQuestPanel() {
                     {QUEST_ICONS[quest.code] || '🎯'} {quest.title}
                   </span>
 
-                  <span
-                    style={{
-                      color: quest.completed
-                        ? 'var(--accent-success)'
-                        : 'var(--text-secondary)',
-                      fontSize: '0.85rem',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {quest.completed
-                      ? '✓ Hoàn thành'
-                      : getProgressText(quest)}
-                  </span>
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            whiteSpace: 'nowrap',
+                        }}
+                        >
+                        <span
+                            style={{
+                            color: 'var(--accent-gold)',
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            }}
+                        >
+                            🎁 +{quest.reward || 0} điểm
+                        </span>
+
+                        <span
+                            style={{
+                            color: quest.completed
+                                ? 'var(--accent-success)'
+                                : 'var(--text-secondary)',
+                            fontSize: '0.85rem',
+                            }}
+                        >
+                            {quest.completed
+                            ? '✓ Hoàn thành'
+                            : getProgressText(quest)}
+                        </span>
+                    </div>
                 </div>
 
                 <div

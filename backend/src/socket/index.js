@@ -571,16 +571,57 @@ const initSocket = (io) => {
     socket.leave(roomId);
 
     const gameRoom = GameManager.get(roomId);
+
     if (gameRoom) {
+      const leavingPlayer = gameRoom.players.get(socket.id);
+
+      // Ghi nhận thời gian nếu người chơi rời khi trận vẫn đang chạy
+      if (
+        gameRoom.isRunning &&
+        leavingPlayer?.playerId &&
+        gameRoom.matchId &&
+        gameRoom.startedAt
+      ) {
+        const playtimeSeconds = Math.max(
+          0,
+          Math.floor((Date.now() - gameRoom.startedAt) / 1000)
+        );
+
+        try {
+          await publishGameEvent({
+            schemaVersion: 1,
+            eventId: `PLAYTIME:${gameRoom.matchId}:${leavingPlayer.playerId}`,
+            eventType: 'PLAYTIME_RECORDED',
+            occurredAt: new Date().toISOString(),
+            matchId: gameRoom.matchId,
+            playerId: leavingPlayer.playerId,
+            durationSeconds: playtimeSeconds,
+          });
+        } catch (eventError) {
+          logger.warn(
+            '[DailyQuest] Failed to publish leave playtime event',
+            {
+              error: eventError.message,
+              playerId: leavingPlayer.playerId,
+              matchId: gameRoom.matchId,
+            }
+          );
+        }
+      }
+
+      // Chỉ xóa người chơi sau khi đã gửi sự kiện thời gian
       gameRoom.removePlayer(socket.id);
 
       // Update DB player count
       try {
         const room = await Room.findByPk(roomId);
+
         if (room && room.player_count > 0) {
           await room.decrement('player_count');
         }
-      } catch (e) { /* non-critical */ }
+      } catch (e) {
+        /* non-critical */
+      }
 
       io.to(roomId).emit('player_left', {
         socketId: socket.id,
@@ -589,7 +630,10 @@ const initSocket = (io) => {
       });
 
       // End match if room is empty
-      if (gameRoom.isRunning && gameRoom.getPlayerCount() === 0) {
+      if (
+        gameRoom.isRunning &&
+        gameRoom.getPlayerCount() === 0
+      ) {
         await endMatch(io, roomId, gameRoom);
       }
     }

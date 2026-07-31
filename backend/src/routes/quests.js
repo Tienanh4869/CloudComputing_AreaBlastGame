@@ -55,6 +55,7 @@ router.get('/daily', authenticate, async (req, res, next) => {
         target: definition.target,
         unit: definition.unit,
         completed: current?.completed || false,
+        reward: definition.reward,
         completedAt: current?.completed_at || null,
       };
     });
