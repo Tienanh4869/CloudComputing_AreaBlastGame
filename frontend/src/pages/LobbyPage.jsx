@@ -7,6 +7,7 @@ import { logout as apiLogout, updateProfile, updateNickname, uploadImage } from 
 import useAuthStore from '../store/authStore';
 import useGameStore from '../store/gameStore';
 import useSocket from '../hooks/useSocket';
+import DailyQuestPanel from '../components/DailyQuestPanel';
 
 const StatusBadge = ({ status }) => {
   const map = {
@@ -257,8 +258,12 @@ export default function LobbyPage() {
           {activeTab === 'menu' && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: 500, marginTop: '5vh' }}>
               <h1 style={{ fontSize: '3rem', fontWeight: 900, marginBottom: 10 }} className="gradient-text">ARENA BLAST</h1>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 40, fontSize: '1.1rem' }}>Battle Royale in your browser.</p>
-              
+              <p style={{ color: 'var(--text-secondary)', marginBottom: 20, fontSize: '1.1rem' }}>
+                Battle Royale in your browser.
+              </p>
+
+              <DailyQuestPanel />
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>
                 <button 
                   className="btn btn-primary btn-lg" 

@@ -311,8 +311,8 @@ app.serviceBusQueue('dailyQuestProcessor', {
                         unit,
                         completed,
                         completed_at,
-                        "createdAt",
-                        "updatedAt"
+                        created_at,
+                        updated_at
                     )
                     VALUES (
                         $1,
@@ -359,7 +359,7 @@ app.serviceBusQueue('dailyQuestProcessor', {
                                 THEN NOW()
                             ELSE daily_quest_progress.completed_at
                         END,
-                        "updatedAt" = NOW()
+                        updated_at = NOW()
                 `,
                 [
                     randomUUID(),
