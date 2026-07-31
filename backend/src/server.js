@@ -21,11 +21,11 @@ async function bootstrap() {
 
   // 2. Sync DB models (alter: safe for dev, use migrations in prod)
   if (NODE_ENV === 'development') {
-    await sequelize.sync();
-    logger.info('[DB] Models synced');
+    await sequelize.sync({ alter: true });
+    logger.info('[DB] Models synced (alter)');
   } else {
-    await sequelize.sync();
-    logger.info('[DB] Models synced');
+    await sequelize.sync({ alter: true }); // Tạm thời bật alter trên production để update DB schema
+    logger.info('[DB] Models synced (alter)');
   }
 
   // 3. Connect to Redis (optional, degrades gracefully)
