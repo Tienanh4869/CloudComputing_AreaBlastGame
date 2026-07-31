@@ -22,6 +22,14 @@ const Room = sequelize.define('Room', {
     type: DataTypes.STRING(20),
     defaultValue: 'waiting',
   },
+  is_public: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
+  password: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+  },
   max_players: {
     type: DataTypes.INTEGER,
     defaultValue: 4,

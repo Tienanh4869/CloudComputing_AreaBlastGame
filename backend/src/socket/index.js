@@ -1,16 +1,31 @@
 // src/socket/index.js — Socket.IO server setup and connection handler
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET, GAME } = require('../config/env');
+const { JWT_SECRET, GAME, SERVICE_BUS_CONNECTION_STRING } = require('../config/env');
 const { User, Player, Room, Match, MatchPlayer, MatchEvent } = require('../models');
 const GameManager = require('../game/GameManager');
+const Matchmaker = require('../game/Matchmaker');
 const { metrics, increment, decrement } = require('../utils/metrics');
 const logger = require('../utils/logger');
+const { ServiceBusClient } = require('@azure/service-bus');
+
+// Init Service Bus Client (if configured)
+let sbSender = null;
+if (SERVICE_BUS_CONNECTION_STRING) {
+  try {
+    const sbClient = new ServiceBusClient(SERVICE_BUS_CONNECTION_STRING);
+    sbSender = sbClient.createSender('match-results');
+  } catch (err) {
+    logger.error('Failed to init ServiceBusClient:', err.message);
+  }
+}
 
 /**
  * Initialize Socket.IO event handlers.
  * Attaches to an existing Socket.IO server instance.
  */
 const initSocket = (io) => {
+  // Initialize Matchmaker with io instance
+  Matchmaker.init(io);
 
   // ── Middleware: Authenticate socket connections ───────────────
   io.use(async (socket, next) => {
@@ -49,7 +64,7 @@ const initSocket = (io) => {
     logger.info('[Socket] Client connected', { socketId: socket.id, username: socket.username });
 
     // ── join_room: Player requests to join a game room ──────────
-    socket.on('join_room', async ({ roomId, roomCode }) => {
+    socket.on('join_room', async ({ roomId, roomCode, password }) => {
       try {
         const room = await Room.findByPk(roomId);
         if (!room) return socket.emit('error', { message: 'Room not found' });
@@ -63,6 +78,9 @@ const initSocket = (io) => {
 
         // Get or create in-memory game room (this is async and may take time)
         const gameRoom = await GameManager.getOrCreate(roomId, roomCode || room.code);
+        if (room.name.startsWith('Quick Match ')) {
+           gameRoom.isQuickMatch = true;
+        }
 
         // If the user clicked join on ANOTHER room while we were waiting, ABORT this stale request!
         if (socket.latestRequestedRoomId !== roomId) {
@@ -109,6 +127,8 @@ const initSocket = (io) => {
         // Update room player count
         await room.increment('player_count');
 
+        socket.isHost = (room.created_by === socket.userId);
+
         // Notify everyone in the room
         io.to(roomId).emit('player_joined', {
           socketId: socket.id,
@@ -116,16 +136,18 @@ const initSocket = (io) => {
           nickname: socket.nickname,
           color: socket.avatarColor,
           playerCount: gameRoom.getPlayerCount(),
+          isHost: socket.isHost,
         });
 
         // Send current state to the newly joined player
         socket.emit('room_joined', {
-          roomId: roomCode,
+          roomId: roomCode || room.code,
           state: gameRoom.getState(),
           mapWidth: gameRoom.mapConfig.width,
           mapHeight: gameRoom.mapConfig.height,
           mapUrl: gameRoom.mapConfig.url,
           mapTheme: gameRoom.mapConfig.theme,
+          isHost: socket.isHost,
         });
 
         logger.gameEvent('player_joined_room', {
@@ -133,6 +155,21 @@ const initSocket = (io) => {
           roomId,
           playerCount: gameRoom.getPlayerCount(),
         });
+
+        // Quick Match auto-start logic
+        if (gameRoom.isQuickMatch && !gameRoom.isRunning) {
+          // Send countdown event to newly joined player if timer is active
+          if (gameRoom.autoStartTimer) {
+             socket.emit('match_countdown', { seconds: 3 });
+          } else {
+             // First player joining triggers the 3-second countdown for the room
+             io.to(roomId).emit('match_countdown', { seconds: 3 });
+             gameRoom.autoStartTimer = setTimeout(() => {
+                startMatch(io, roomId, gameRoom);
+             }, 3000);
+          }
+        }
+
       } catch (err) {
         logger.error('[Socket] join_room error:', err.message);
         socket.emit('error', { message: 'Failed to join room' });
@@ -153,6 +190,13 @@ const initSocket = (io) => {
         socket.emit('error', { message: 'Game room not found.' });
         return;
       }
+
+      // ONLY host can start the match
+      if (!socket.isHost) {
+        socket.emit('error', { message: 'Chỉ có Chủ phòng mới có quyền bắt đầu trận!' });
+        return;
+      }
+
       if (gameRoom.isRunning) {
         // Already started — send current state
         socket.emit('match_started', {
@@ -240,6 +284,32 @@ const initSocket = (io) => {
       }
     });
 
+    // ── global_chat_message: World chat ──────────────────────────
+    socket.on('global_chat_message', (msg) => {
+      if (!msg || typeof msg !== 'string' || msg.trim().length === 0) return;
+
+      io.emit('global_chat_message', {
+        socketId: socket.id,
+        nickname: socket.nickname,
+        message: msg.trim().substring(0, 150),
+        timestamp: Date.now(),
+      });
+    });
+
+    // ── join_quick_match ─────────────────────────────────────────
+    socket.on('join_quick_match', async () => {
+      await Matchmaker.join({
+        socketId: socket.id,
+        userId: socket.userId,
+        nickname: socket.nickname,
+      });
+    });
+
+    // ── leave_quick_match ─────────────────────────────────────────
+    socket.on('leave_quick_match', async () => {
+      await Matchmaker.leaveBySocket(socket.id);
+    });
+
     // ── leave_room: Player manually leaves ──────────────────────
     socket.on('leave_room', async () => {
       await handlePlayerLeave(socket, io);
@@ -249,6 +319,7 @@ const initSocket = (io) => {
     socket.on('disconnect', async () => {
       decrement('connections');
       logger.info('[Socket] Client disconnected', { socketId: socket.id, username: socket.username });
+      await Matchmaker.leaveBySocket(socket.id);
       await handlePlayerLeave(socket, io);
     });
 
@@ -373,24 +444,12 @@ const initSocket = (io) => {
         duration_seconds: results.duration,
       });
 
-      // Update match_players stats and player profiles
+      // Update match_players stats (Still keep this in backend to record the match history)
       for (const ranking of results.rankings) {
         await MatchPlayer.update(
           { score: ranking.score, kills: ranking.kills, deaths: ranking.deaths, rank: ranking.rank },
           { where: { match_id: match.id, player_id: ranking.playerId } }
         );
-
-        // Update global player stats
-        const player = await Player.findByPk(ranking.playerId);
-        if (player) {
-          await player.increment({
-            total_score: ranking.score,
-            kills: ranking.kills,
-            deaths: ranking.deaths,
-            wins: ranking.rank === 1 ? 1 : 0,
-            losses: ranking.rank !== 1 ? 1 : 0,
-          });
-        }
       }
 
       // Save event log to DB
@@ -400,9 +459,26 @@ const initSocket = (io) => {
 
       await Room.update({ status: 'finished' }, { where: { id: roomId } });
 
-      // Gọi Azure Function (Serverless) để tính toán bảng xếp hạng bất đồng bộ
-      // Thay vì tính ở đây gây block game server
-      if (process.env.LEADERBOARD_UPDATER_URL) {
+      // Gửi kết quả lên Azure Service Bus để Function (Worker) tính toán bảng xếp hạng bất đồng bộ
+      if (sbSender) {
+        const messages = results.rankings.map(ranking => ({
+          body: {
+            event: 'match_ended',
+            playerId: ranking.playerId,
+            score: ranking.score,
+            kills: ranking.kills,
+            deaths: ranking.deaths,
+            rank: ranking.rank
+          }
+        }));
+        try {
+          await sbSender.sendMessages(messages);
+          logger.info('[ServiceBus] Đã gửi thông báo kết thúc trận lên hàng đợi match-results');
+        } catch (e) {
+          logger.warn('[ServiceBus] Lỗi gửi thông báo:', e.message);
+        }
+      } else if (process.env.LEADERBOARD_UPDATER_URL) {
+        // Fallback webhook
         for (const ranking of results.rankings) {
           try {
             fetch(process.env.LEADERBOARD_UPDATER_URL, {
@@ -414,10 +490,9 @@ const initSocket = (io) => {
                 score: ranking.score,
                 kills: ranking.kills
               })
-            }).catch(e => logger.warn('[Serverless] Lỗi gọi Azure Function:', e.message));
+            }).catch(() => {});
           } catch (e) {}
         }
-        logger.info('[Serverless] Đã gửi tín hiệu cập nhật Leaderboard sang Azure Function');
       }
 
       // Notify clients

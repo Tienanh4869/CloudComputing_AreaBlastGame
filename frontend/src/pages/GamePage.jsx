@@ -1,6 +1,6 @@
 // src/pages/GamePage.jsx — Main game screen
-import React, { useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 import useAuthStore from '../store/authStore';
 import useSocket from '../hooks/useSocket';
@@ -12,14 +12,15 @@ export default function GamePage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { player } = useAuthStore();
+  const location = useLocation();
   const {
-    matchStatus, myHp, myMaxHp, myScore, myKills, myAlive,
+    matchStatus, matchCountdown, myHp, myMaxHp, myScore, myKills, myAlive,
     myRespawning, myRespawnTimer, startTime, matchDuration,
     mapWidth, mapHeight, mapUrl, matchLeaderboard, killFeed, matchResults,
-    players, currentRoom,
+    players, currentRoom, isHost,
   } = useGameStore();
 
-  const { joinRoom, leaveRoom, sendReady, sendMove, sendAttack } = useSocket();
+  const { socket, joinRoom, leaveRoom, sendReady, sendMove, sendAttack } = useSocket();
   const hasJoined = useRef(false);
   const joystickRef = useRef({ dx: 0, dy: 0 });
 
@@ -252,24 +253,62 @@ export default function GamePage() {
       {matchStatus === 'waiting' && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 50,
-          background: 'rgba(0,0,0,0.75)',
+          background: 'rgba(10,14,26,0.95)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backdropFilter: 'blur(4px)',
+          backdropFilter: 'blur(8px)',
         }}>
-          <div className="card animate-fade-in" style={{ textAlign: 'center', padding: 48, maxWidth: 420 }}>
-            <div style={{ fontSize: '3rem', marginBottom: 16 }}>🎮</div>
-            <h2 style={{ marginBottom: 8 }}>Waiting for players...</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
-              Room code: <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-secondary)', letterSpacing: 3 }}>
-                {currentRoom?.code}
-              </strong>
-            </p>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: 24 }}>
-              Share this code with friends or click Ready to start solo!
-            </p>
-            <button id="btn-ready" className="btn btn-primary btn-lg btn-full animate-glow" onClick={sendReady}>
-              ✅ Ready to Battle!
-            </button>
+          <div style={{
+            display: 'flex', width: '90%', maxWidth: 1000, height: '80%',
+            background: 'var(--bg-card)', borderRadius: 16, overflow: 'hidden',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)', border: '1px solid var(--border-color)'
+          }}>
+            {/* Left side: Players list & Settings */}
+            <div style={{ flex: 1, padding: 32, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-color)' }}>
+              <h2 style={{ marginBottom: 8, fontSize: '2rem' }}>{currentRoom?.name || 'Game Room'}</h2>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
+                Room Code: <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-secondary)', letterSpacing: 2 }}>{currentRoom?.code}</strong>
+                {isHost && <span className="badge badge-warning" style={{ marginLeft: 12 }}>👑 You are Host</span>}
+              </p>
+              
+              <div style={{ flex: 1, overflowY: 'auto', marginBottom: 24 }}>
+                <h4 style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.8rem', marginBottom: 12 }}>
+                  Players ({players.length})
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {players.map((p, i) => (
+                    <div key={p.socketId} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: 8
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 14, height: 14, borderRadius: '50%', background: p.color || '#fff' }} />
+                        <span style={{ fontWeight: 600 }}>{p.nickname}</span>
+                        {i === 0 && <span style={{ fontSize: '0.8rem' }}>👑</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button className="btn btn-secondary btn-lg" onClick={handleLeave} style={{ flex: 1 }} disabled={matchCountdown > 0}>
+                  Leave Room
+                </button>
+                {matchCountdown > 0 ? (
+                  <button className="btn btn-lg" disabled style={{ flex: 2, opacity: 1, background: 'var(--accent-primary)', color: '#fff' }}>
+                    Match Starts in {matchCountdown}...
+                  </button>
+                ) : isHost ? (
+                  <button className="btn btn-primary btn-lg" onClick={sendReady} style={{ flex: 2, background: 'var(--accent-danger)' }}>
+                    🔥 START MATCH
+                  </button>
+                ) : (
+                  <button className="btn btn-secondary btn-lg" disabled style={{ flex: 2, opacity: 0.5 }}>
+                    Waiting for Host...
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

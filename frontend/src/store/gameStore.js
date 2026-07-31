@@ -6,6 +6,7 @@ const useGameStore = create((set, get) => ({
   currentRoom: null,
   matchId: null,
   matchStatus: 'idle',   // idle | waiting | playing | finished
+  matchCountdown: 0,
 
   // Game state from server
   players: [],
@@ -21,6 +22,7 @@ const useGameStore = create((set, get) => ({
   myHp: 100,
   myMaxHp: 100,
   myAlive: true,
+  isHost: false,
   myRespawning: false,
   myRespawnTimer: 0,
 
@@ -44,10 +46,13 @@ const useGameStore = create((set, get) => ({
   // ── Actions ───────────────────────────────────────────────────
 
   setRoom: (room) => set({ currentRoom: room }),
+  setIsHost: (isHost) => set({ isHost }),
 
   setMySocketId: (id) => set({ mySocketId: id }),
 
   setMatchStatus: (status) => set({ matchStatus: status }),
+
+  setMatchCountdown: (seconds) => set({ matchCountdown: seconds }),
 
   setMatchId: (id) => set({ matchId: id }),
 
@@ -102,8 +107,10 @@ const useGameStore = create((set, get) => ({
   // Reset for new game
   resetGame: () => set({
     currentRoom: null,
+    isHost: false,
     matchId: null,
     matchStatus: 'idle',
+    matchCountdown: 0,
     players: [],
     particles: [],
     myScore: 0,

@@ -1,8 +1,9 @@
 // src/server.js — HTTP + Socket.IO server entry point
 const http = require('http');
 const { Server: SocketServer } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
 const app = require('./app');
-const { connectRedis } = require('./config/redis');
+const { connectRedis, getPubSub } = require('./config/redis');
 const { initSocket } = require('./socket');
 const env = require('./config/env');
 const { PORT, CORS_ORIGIN, NODE_ENV } = env;
@@ -33,7 +34,6 @@ async function bootstrap() {
   // 4. Create HTTP server
   const httpServer = http.createServer(app);
 
-  // 5. Setup Socket.IO
   const io = new SocketServer(httpServer, {
     cors: {
       origin: CORS_ORIGIN,
@@ -43,6 +43,13 @@ async function bootstrap() {
     // Use polling as fallback for environments without WebSocket support
     transports: ['websocket', 'polling'],
   });
+
+  // 5.5 Setup Redis Adapter
+  const { pubClient, subClient } = getPubSub();
+  if (pubClient && subClient) {
+    io.adapter(createAdapter(pubClient, subClient));
+    logger.info('[Socket] Redis Adapter attached');
+  }
 
   // 6. Initialize game socket handlers
   initSocket(io);

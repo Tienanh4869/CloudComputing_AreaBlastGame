@@ -4,6 +4,8 @@ const { REDIS } = require('./env');
 const logger = require('../utils/logger');
 
 let redisClient = null;
+let pubClient = null;
+let subClient = null;
 
 const connectRedis = async () => {
   const protocol = REDIS.port === 6380 ? 'rediss' : 'redis';
@@ -27,13 +29,20 @@ const connectRedis = async () => {
 
   try {
     await redisClient.connect();
+    pubClient = redisClient.duplicate();
+    subClient = redisClient.duplicate();
+    await Promise.all([pubClient.connect(), subClient.connect()]);
+    logger.info('[Redis] Pub/Sub clients connected for Adapter');
   } catch (err) {
     logger.warn('[Redis] Could not connect, running without Redis cache:', err.message);
     redisClient = null;
+    pubClient = null;
+    subClient = null;
   }
 };
 
 const getRedis = () => redisClient;
+const getPubSub = () => ({ pubClient, subClient });
 
 // Simple cache helpers
 const cache = {
@@ -88,4 +97,4 @@ const cache = {
   },
 };
 
-module.exports = { connectRedis, getRedis, cache };
+module.exports = { connectRedis, getRedis, getPubSub, cache };
