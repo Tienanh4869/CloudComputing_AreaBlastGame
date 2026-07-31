@@ -58,6 +58,9 @@ const config = {
 
   // Azure Storage
   AZURE_STORAGE_CONNECTION_STRING: process.env.AZURE_STORAGE_CONNECTION_STRING || null,
+
+  // Azure Service Bus
+  SERVICE_BUS_CONNECTION_STRING: process.env.SERVICE_BUS_CONNECTION_STRING || null,
 };
 
 config.loadKeyVaultSecrets = async () => {
@@ -89,6 +92,12 @@ config.loadKeyVaultSecrets = async () => {
     if (blobSecret && blobSecret.value) {
       config.AZURE_STORAGE_CONNECTION_STRING = blobSecret.value;
       console.log('[KeyVault] Successfully loaded AZURE-STORAGE-CONNECTION-STRING');
+    }
+
+    const sbSecret = await client.getSecret('SERVICE-BUS-CONNECTION-STRING').catch(() => null);
+    if (sbSecret && sbSecret.value) {
+      config.SERVICE_BUS_CONNECTION_STRING = sbSecret.value;
+      console.log('[KeyVault] Successfully loaded SERVICE-BUS-CONNECTION-STRING');
     }
   } catch (err) {
     console.error('[KeyVault] Error loading secrets:', err.message);

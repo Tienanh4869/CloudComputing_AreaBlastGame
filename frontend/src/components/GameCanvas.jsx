@@ -188,14 +188,16 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
       ctx.beginPath();
       ctx.rect(0, 0, W, H); // Full screen
       ctx.arc(safeZone.x, safeZone.y, safeZone.radius, 0, Math.PI * 2, true); // Hole
-      ctx.fillStyle = 'rgba(100, 0, 100, 0.2)';
+      ctx.fillStyle = 'rgba(80, 0, 150, 0.4)'; // Darker purple poison
       ctx.fill();
       
       // Draw safe zone border
       ctx.beginPath();
       ctx.arc(safeZone.x, safeZone.y, safeZone.radius, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 0, 255, 0.6)';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ff00ff';
+      ctx.lineWidth = 4;
+      ctx.shadowColor = '#ff00ff';
+      ctx.shadowBlur = 15;
       ctx.stroke();
       ctx.restore();
     }

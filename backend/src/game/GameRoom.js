@@ -420,7 +420,7 @@ class GameRoom {
     this.isRunning = true;
     this.startedAt = Date.now();
     this.matchDuration = 120 * 1000; // 2 minutes
-    this.maxSafeZoneRadius = Math.max(this.mapConfig.width, this.mapConfig.height) / 1.5;
+    this.maxSafeZoneRadius = Math.max(this.mapConfig.width, this.mapConfig.height) / 1.8; // Starts smaller so corners are poisoned early
     this.tickCount = 0;
     
     this._logEvent('match_started', { matchId });

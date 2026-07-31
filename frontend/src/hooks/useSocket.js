@@ -10,7 +10,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 let socketInstance = null;
 
 // Shared pending join state — survives StrictMode double-effect
-let pendingJoin = null; // { roomId, roomCode }
+let pendingJoin = null; // { roomId, roomCode, password }
 
 export const useSocket = () => {
   const socketRef = useRef(null);
@@ -24,6 +24,7 @@ export const useSocket = () => {
   const setMapDimensions = useGameStore((s) => s.setMapDimensions);
   const setMatchResults = useGameStore((s) => s.setMatchResults);
   const setMySocketId = useGameStore((s) => s.setMySocketId);
+  const setMatchCountdown = useGameStore((s) => s.setMatchCountdown);
 
   // Connect on mount
   useEffect(() => {
@@ -68,19 +69,37 @@ export const useSocket = () => {
     });
 
     // Confirmed join — server acknowledged our join_room
-    socket.on('room_joined', ({ roomId, state, mapWidth, mapHeight, mapUrl, mapTheme }) => {
-      console.log('[Socket] room_joined confirmed', { roomId });
+    socket.on('room_joined', ({ roomId, state, mapWidth, mapHeight, mapUrl, mapTheme, isHost }) => {
+      console.log('[Socket] room_joined confirmed', { roomId, isHost });
       setMapDimensions(mapWidth, mapHeight, mapUrl, mapTheme);
+      useGameStore.getState().setIsHost(!!isHost);
       // Update initial game state (players already in room)
       useGameStore.getState().updateGameState(state);
     });
 
     // Match lifecycle
+    socket.on('match_countdown', ({ seconds }) => {
+      console.log('[Socket] match_countdown', { seconds });
+      setMatchCountdown(seconds);
+      // We will count down locally
+      let timeLeft = seconds;
+      const interval = setInterval(() => {
+        timeLeft -= 1;
+        if (timeLeft <= 0) {
+          clearInterval(interval);
+          setMatchCountdown(0);
+        } else {
+          setMatchCountdown(timeLeft);
+        }
+      }, 1000);
+    });
+
     socket.on('match_started', ({ matchId, mapWidth, mapHeight, mapUrl, mapTheme }) => {
       console.log('[Socket] match_started', { matchId });
       setMatchStatus('playing');
       setMatchId(matchId);
       setMapDimensions(mapWidth, mapHeight, mapUrl, mapTheme);
+      setMatchCountdown(0); // clear any remaining countdown
       toast.success('⚔️ Battle started!', { duration: 2000 });
     });
 
@@ -121,16 +140,16 @@ export const useSocket = () => {
   }, [token]);
 
   // Emit helpers
-  const joinRoom = useCallback((roomId, roomCode) => {
+  const joinRoom = useCallback((roomId, roomCode, password) => {
     // Store pending join for auto-rejoin/StrictMode
-    pendingJoin = { roomId, roomCode };
+    pendingJoin = { roomId, roomCode, password };
 
     const socket = socketRef.current;
     if (!socket) { console.error('[Socket] No socket!'); return; }
 
     const doJoin = () => {
       console.log('[Socket] Emitting join_room', { roomId, roomCode });
-      socket.emit('join_room', { roomId, roomCode });
+      socket.emit('join_room', { roomId, roomCode, password });
     };
 
     // If already connected, join immediately; else wait for connect

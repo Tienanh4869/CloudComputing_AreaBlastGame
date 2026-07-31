@@ -6,16 +6,33 @@ const { authenticate } = require('../middleware/auth');
 const { generateRoomCode } = require('../utils/helpers');
 const { Op } = require('sequelize');
 
-// GET /api/rooms — List available rooms
+// GET /api/rooms — List available rooms with pagination and search
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const rooms = await Room.findAll({
-      where: { status: { [Op.in]: ['waiting', 'playing'] } },
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
+    const search = req.query.search || '';
+    const offset = (page - 1) * limit;
+
+    const whereClause = { status: { [Op.in]: ['waiting', 'playing'] } };
+    if (search) {
+      whereClause.name = { [Op.iLike]: `%${search}%` };
+    }
+
+    const { count, rows: rooms } = await Room.findAndCountAll({
+      where: whereClause,
       include: [{ model: User, as: 'creator', attributes: ['username'] }],
       order: [['created_at', 'DESC']],
-      limit: 20,
+      limit,
+      offset,
     });
-    res.json({ rooms });
+
+    res.json({
+      rooms,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+    });
   } catch (err) { next(err); }
 });
 
@@ -70,5 +87,32 @@ router.get('/code/:code', authenticate, async (req, res, next) => {
     res.json({ room });
   } catch (err) { next(err); }
 });
+
+// POST /api/rooms/join — Validate join
+router.post('/join',
+  authenticate,
+  [
+    body('code').trim().isLength({ min: 6, max: 6 }).withMessage('Code must be 6 chars'),
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+      }
+
+      const { code } = req.body;
+      const room = await Room.findOne({
+        where: { code: code.toUpperCase() },
+      });
+
+      if (!room) return res.status(404).json({ error: 'Room not found' });
+      if (room.status === 'finished') return res.status(400).json({ error: 'Room has already ended' });
+      if (room.player_count >= room.max_players) return res.status(400).json({ error: 'Room is full' });
+
+      res.json({ success: true, room });
+    } catch (err) { next(err); }
+  }
+);
 
 module.exports = router;
