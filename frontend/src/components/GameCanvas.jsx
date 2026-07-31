@@ -154,6 +154,52 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
       }
     }
 
+    // Draw bushes
+    if (mapTheme?.bushes) {
+      ctx.fillStyle = mapTheme.bushColor || 'rgba(100, 255, 100, 0.4)';
+      ctx.strokeStyle = mapTheme.bushBorder || 'rgba(50, 200, 50, 0.6)';
+      ctx.lineWidth = 2;
+      for (const bush of mapTheme.bushes) {
+        ctx.beginPath();
+        ctx.rect(bush.x, bush.y, bush.w, bush.h);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Add some leaf-like details
+        ctx.save();
+        ctx.clip();
+        ctx.fillStyle = mapTheme.bushBorder || 'rgba(50, 200, 50, 0.6)';
+        for (let i = 0; i < bush.w; i += 30) {
+          for (let j = 0; j < bush.h; j += 30) {
+            ctx.beginPath();
+            ctx.arc(bush.x + i + 15, bush.y + j + 15, 8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    // Draw safe zone
+    const safeZone = getState().safeZone;
+    if (safeZone) {
+      // Draw outer poison area
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, H); // Full screen
+      ctx.arc(safeZone.x, safeZone.y, safeZone.radius, 0, Math.PI * 2, true); // Hole
+      ctx.fillStyle = 'rgba(100, 0, 100, 0.2)';
+      ctx.fill();
+      
+      // Draw safe zone border
+      ctx.beginPath();
+      ctx.arc(safeZone.x, safeZone.y, safeZone.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 0, 255, 0.6)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Draw particles (collectible dots)
     for (const p of particles) {
       const t = Date.now() / 600;
@@ -213,8 +259,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
   function drawPlayer(ctx, player, isMe) {
     const radius = player.radius || PLAYER_RADIUS;
 
-    if (!player.alive) {
-      // Draw ghost/dead indicator
+    if (!player.alive || player.respawning) {
+      // Draw ghost/dead/respawning indicator
       ctx.save();
       ctx.globalAlpha = 0.3;
       ctx.fillStyle = player.color || '#888';
@@ -226,6 +272,11 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
     }
 
     ctx.save();
+    
+    // If player is in bush, make them transparent
+    if (player.inBushId !== null) {
+      ctx.globalAlpha = 0.6;
+    }
 
     // Glow for current player
     if (isMe) {

@@ -14,6 +14,7 @@ export default function GamePage() {
   const { player } = useAuthStore();
   const {
     matchStatus, myHp, myMaxHp, myScore, myKills, myAlive,
+    myRespawning, myRespawnTimer, startTime, matchDuration,
     mapWidth, mapHeight, mapUrl, matchLeaderboard, killFeed, matchResults,
     players, currentRoom,
   } = useGameStore();
@@ -44,6 +45,23 @@ export default function GamePage() {
       }, 8000);
     }
   }, [matchStatus]);
+
+  // Timer logic
+  const [timeLeft, setTimeLeft] = React.useState(0);
+  useEffect(() => {
+    if (matchStatus !== 'playing' || !startTime) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, matchDuration - (Date.now() - startTime));
+      setTimeLeft(Math.floor(remaining / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [matchStatus, startTime, matchDuration]);
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
 
   const handleLeave = () => {
     leaveRoom();
@@ -104,10 +122,23 @@ export default function GamePage() {
             </div>
           </div>
 
-          {!myAlive && (
+          {!myAlive && !myRespawning && (
             <span className="badge badge-danger animate-pulse">💀 Dead</span>
           )}
+          {myRespawning && (
+            <span className="badge badge-warning animate-pulse">⏳ {myRespawnTimer}s</span>
+          )}
         </div>
+
+        {/* Center: Match Timer */}
+        {matchStatus === 'playing' && (
+          <div style={{ flexShrink: 0, textAlign: 'center', margin: '0 20px' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--accent-danger)', textTransform: 'uppercase', fontWeight: 'bold' }}>Death Match</div>
+            <div style={{ fontSize: '1.4rem', fontFamily: 'var(--font-mono)', fontWeight: 800, color: timeLeft <= 10 ? '#FF4757' : '#FFF' }}>
+              {formatTime(timeLeft)}
+            </div>
+          </div>
+        )}
 
         {/* Right: Score + Kills + Controls hint */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -240,6 +271,20 @@ export default function GamePage() {
               ✅ Ready to Battle!
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── Respawning overlay ────────────────────────── */}
+      {matchStatus === 'playing' && myRespawning && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 40,
+          background: 'rgba(255,0,0,0.15)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <h1 style={{ fontSize: '4rem', color: '#FF4757', textShadow: '0 4px 20px rgba(0,0,0,0.8)' }}>YOU DIED</h1>
+          <p style={{ fontSize: '1.5rem', color: '#FFF', textShadow: '0 2px 10px rgba(0,0,0,0.8)', marginTop: 20 }}>
+            Respawning in <span style={{ fontSize: '2rem', fontWeight: 800 }}>{myRespawnTimer}</span>...
+          </p>
         </div>
       )}
 

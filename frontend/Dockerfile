@@ -15,6 +15,8 @@ RUN echo 'server { \
   listen 80; \
   root /usr/share/nginx/html; \
   index index.html; \
+  location /api/ { proxy_pass http://backend:3001/api/; proxy_http_version 1.1; proxy_set_header Host $host; } \
+  location /socket.io/ { proxy_pass http://backend:3001/socket.io/; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade"; proxy_set_header Host $host; } \
   location / { try_files $uri $uri/ /index.html; } \
 }' > /etc/nginx/conf.d/default.conf
 
