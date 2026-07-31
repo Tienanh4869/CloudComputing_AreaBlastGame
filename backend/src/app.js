@@ -18,6 +18,7 @@ const roomRoutes = require('./routes/rooms');
 const matchRoutes = require('./routes/matches');
 const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
+const questRoutes = require('./routes/quests');
 
 const app = express();
 
@@ -84,6 +85,7 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/quests', questRoutes);
 
 // ── Error handling ───────────────────────────────────────────────
 app.use(notFound);
