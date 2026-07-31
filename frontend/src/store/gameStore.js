@@ -21,6 +21,13 @@ const useGameStore = create((set, get) => ({
   myHp: 100,
   myMaxHp: 100,
   myAlive: true,
+  myRespawning: false,
+  myRespawnTimer: 0,
+
+  // Safe zone and timer
+  safeZone: null,
+  startTime: null,
+  matchDuration: 120000,
 
   // Leaderboard (in-match)
   matchLeaderboard: [],
@@ -59,6 +66,11 @@ const useGameStore = create((set, get) => ({
       myScore: me?.score ?? get().myScore,
       myKills: me?.kills ?? get().myKills,
       myAlive: me?.alive ?? get().myAlive,
+      myRespawning: me?.respawning ?? false,
+      myRespawnTimer: me?.respawnTimer ?? 0,
+      safeZone: state.safeZone ?? null,
+      startTime: state.startTime ?? null,
+      matchDuration: state.matchDuration ?? 120000,
     });
   },
 
