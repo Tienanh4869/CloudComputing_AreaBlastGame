@@ -10,6 +10,8 @@ const logger = require('../utils/logger');
 const { BlobServiceClient } = require('@azure/storage-blob');
 const ENV = require('../config/env');
 const { moderateImage } = require('../services/imageModeration');
+const { publishGameEvent } = require('../config/serviceBus');
+const { getQuestDate } = require('../utils/dailyQuests');
 
 const ALLOWED_UPLOAD_TYPES = new Set(['avatar_url', 'weapon_url']);
 const IMAGE_FORMATS = {
@@ -106,6 +108,25 @@ router.post('/login', loginRules, async (req, res, next) => {
     const token = signToken(user.id);
     logger.info('[Auth] User logged in', { username, userId: user.id });
 
+    if (player) {
+      try {
+        await publishGameEvent({
+          schemaVersion: 1,
+          eventId: `LOGIN:${player.id}:${getQuestDate()}`,
+          eventType: 'PLAYER_LOGIN',
+          occurredAt: new Date().toISOString(),
+          playerId: player.id,
+        });
+      } catch (eventError) {
+        logger.warn(
+          '[DailyQuest] Failed to publish login event',
+          {
+            error: eventError.message,
+            playerId: player.id,
+          }
+        );
+      }
+    }
     res.json({
       message: 'Login successful',
       token,

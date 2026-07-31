@@ -7,6 +7,8 @@ const Matchmaker = require('../game/Matchmaker');
 const { metrics, increment, decrement } = require('../utils/metrics');
 const logger = require('../utils/logger');
 const { ServiceBusClient } = require('@azure/service-bus');
+const { v4: uuidv4 } = require('uuid');
+const { publishGameEvent } = require('../config/serviceBus');
 
 // Init Service Bus Client (if configured)
 let sbSender = null;
@@ -271,6 +273,23 @@ const initSocket = (io) => {
             killerNickname: socket.nickname,
             targetNickname: hit.target.nickname,
           });
+          if (socket.playerId && hit.target.playerId && gameRoom.matchId) {
+            publishGameEvent({
+              schemaVersion: 1,
+              eventId: uuidv4(),
+              eventType: 'PLAYER_KILL',
+              occurredAt: new Date().toISOString(),
+              matchId: gameRoom.matchId,
+              playerId: socket.playerId,
+              targetPlayerId: hit.target.playerId,
+            }).catch((eventError) => {
+              logger.warn('[DailyQuest] Failed to publish kill event', {
+                error: eventError.message,
+                playerId: socket.playerId,
+                matchId: gameRoom.matchId,
+              });
+            });
+          }
         }
 
         // Log to DB asynchronously (don't block socket handler)
@@ -459,6 +478,35 @@ const initSocket = (io) => {
 
       await Room.update({ status: 'finished' }, { where: { id: roomId } });
 
+
+      // Gửi thời gian chơi của từng người để cập nhật nhiệm vụ hằng ngày
+      const playtimeSeconds = Math.max(
+        0,
+        Number(results.duration) || 0
+      );
+
+      for (const ranking of results.rankings) {
+        if (!ranking.playerId) continue;
+
+        publishGameEvent({
+          schemaVersion: 1,
+          eventId: `PLAYTIME:${match.id}:${ranking.playerId}`,
+          eventType: 'PLAYTIME_RECORDED',
+          occurredAt: new Date().toISOString(),
+          matchId: match.id,
+          playerId: ranking.playerId,
+          durationSeconds: playtimeSeconds,
+        }).catch((eventError) => {
+          logger.warn(
+            '[DailyQuest] Failed to publish playtime event',
+            {
+              error: eventError.message,
+              playerId: ranking.playerId,
+              matchId: match.id,
+            }
+          );
+        });
+      }
       // Gửi kết quả lên Azure Service Bus để Function (Worker) tính toán bảng xếp hạng bất đồng bộ
       if (sbSender) {
         const messages = results.rankings.map(ranking => ({
