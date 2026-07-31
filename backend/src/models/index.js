@@ -6,6 +6,8 @@ const Match = require('./Match');
 const MatchPlayer = require('./MatchPlayer');
 const MatchEvent = require('./MatchEvent');
 const LeaderboardScore = require('./LeaderboardScore');
+const DailyQuestProgress = require('./DailyQuestProgress');
+const ProcessedEvent = require('./ProcessedEvent');
 
 // ── Associations ──────────────────────────────────────────────
 
@@ -42,6 +44,19 @@ MatchEvent.belongsTo(Player, { foreignKey: 'target_id', as: 'target' });
 Player.hasMany(LeaderboardScore, { foreignKey: 'player_id', as: 'scores' });
 LeaderboardScore.belongsTo(Player, { foreignKey: 'player_id', as: 'player' });
 
+// Player → Daily quest progress
+Player.hasMany(DailyQuestProgress, { foreignKey: 'player_id', as: 'dailyQuests'});
+
+DailyQuestProgress.belongsTo(Player, { foreignKey: 'player_id', as: 'player'});
+
 module.exports = {
-  User, Player, Room, Match, MatchPlayer, MatchEvent, LeaderboardScore,
+  User,
+  Player,
+  Room,
+  Match,
+  MatchPlayer,
+  MatchEvent,
+  LeaderboardScore,
+  DailyQuestProgress,
+  ProcessedEvent,
 };
