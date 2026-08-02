@@ -245,7 +245,8 @@ class GameRoom {
 
     // Move all alive players
     for (const player of this.players.values()) {
-      if (!player.alive) continue;
+      // Skip fully dead players that aren't respawning
+      if (!player.alive && !player.respawning) continue;
 
       if (player.respawning) {
         // Handle Respawn countdown
@@ -253,6 +254,7 @@ class GameRoom {
           player.respawnTimer--;
           if (player.respawnTimer <= 0) {
             player.respawning = false;
+            player.alive = true; // MUST SET ALIVE TO TRUE!
             const pos = randomMapPosition(this.mapConfig.width, this.mapConfig.height, 60);
             player.x = pos.x;
             player.y = pos.y;

@@ -3,10 +3,41 @@ const router = require('express').Router();
 const { authenticate } = require('../middleware/auth');
 const { requireRole } = require('../middleware/rbac');
 const { User, Player, Room, Match, MatchPlayer, LeaderboardScore } = require('../models');
+const {
+  getAppConfigurationStatus,
+  refreshAppConfiguration,
+} = require('../config/appConfiguration');
 const logger = require('../utils/logger');
 
 // All admin routes require authentication + admin role
 router.use(authenticate, requireRole('admin'));
+
+// GET /api/admin/config - Show the active dynamic gameplay configuration
+router.get('/config', (req, res) => {
+  res.json({ appConfiguration: getAppConfigurationStatus() });
+});
+
+// POST /api/admin/config/refresh - Pull the latest value from Azure on demand
+router.post('/config/refresh', async (req, res) => {
+  try {
+    const result = await refreshAppConfiguration();
+    res.json({
+      message: 'Azure App Configuration refreshed successfully',
+      changed: result.changed,
+      appConfiguration: result.status,
+    });
+  } catch (error) {
+    logger.error('[Admin] App Configuration refresh failed', {
+      code: error.code,
+      error: error.message,
+    });
+    res.status(503).json({
+      code: error.code || 'APPCONFIG_REFRESH_FAILED',
+      error: error.message,
+      appConfiguration: getAppConfigurationStatus(),
+    });
+  }
+});
 
 // GET /api/admin/users — List all users
 router.get('/users', async (req, res, next) => {

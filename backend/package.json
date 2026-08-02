@@ -10,6 +10,7 @@
     "test": "jest --passWithNoTests"
   },
   "dependencies": {
+    "@azure/app-configuration-provider": "^2.5.1",
     "@azure/identity": "^4.13.1",
     "@azure/keyvault-secrets": "^4.11.2",
     "@azure/service-bus": "^7.9.5",

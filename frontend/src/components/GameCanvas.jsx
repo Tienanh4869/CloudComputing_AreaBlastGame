@@ -105,7 +105,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
   // ── Rendering ─────────────────────────────────────────────
 
   function render(ctx, canvas) {
-    const { players, particles, mySocketId } = getState();
+    const { players, particles, mySocketId, mapTheme } = getState();
     const W = canvas.width;
     const H = canvas.height;
 
