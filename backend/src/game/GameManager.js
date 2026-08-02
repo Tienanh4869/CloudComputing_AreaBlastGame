@@ -14,11 +14,8 @@ const GameManager = {
   /**
    * Create or return existing game room.
    */
-  async getOrCreate(roomIdRaw, roomCode) {
-    // Ép kiểu roomId về chuỗi (String) để tránh lỗi bất đồng bộ loại dữ liệu (Int vs String)
-    // Nếu không ép kiểu, Map.has(15) và Map.has("15") sẽ tạo ra 2 phòng khác biệt trong bộ nhớ!
-    const roomId = String(roomIdRaw);
-
+  async getOrCreate(rawRoomId, roomCode) {
+    const roomId = String(rawRoomId);
     // 1. If room exists, return immediately
     if (activeRooms.has(roomId)) {
       return activeRooms.get(roomId);
@@ -101,15 +98,15 @@ const GameManager = {
   /**
    * Get existing room.
    */
-  get(roomIdRaw) {
-    return activeRooms.get(String(roomIdRaw));
+  get(rawRoomId) {
+    return activeRooms.get(String(rawRoomId));
   },
 
   /**
    * Remove room after it ends.
    */
-  destroy(roomIdRaw) {
-    const roomId = String(roomIdRaw);
+  destroy(rawRoomId) {
+    const roomId = String(rawRoomId);
     const room = activeRooms.get(roomId);
     if (room) {
       room.stop();
