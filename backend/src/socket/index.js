@@ -133,7 +133,7 @@ const initSocket = (io) => {
         socket.isHost = (room.created_by === socket.userId);
 
         // Notify everyone in the room
-        io.to(roomId).emit('player_joined', {
+        io.to(String(roomId)).emit('player_joined', {
           socketId: socket.id,
           playerId: socket.playerId,
           nickname: socket.nickname,
@@ -166,7 +166,7 @@ const initSocket = (io) => {
              socket.emit('match_countdown', { seconds: 3 });
           } else {
              // First player joining triggers the 3-second countdown for the room
-             io.to(roomId).emit('match_countdown', { seconds: 3 });
+             io.to(String(roomId)).emit('match_countdown', { seconds: 3 });
              gameRoom.autoStartTimer = setTimeout(() => {
                 startMatch(io, roomId, gameRoom);
              }, 3000);
@@ -259,7 +259,7 @@ const initSocket = (io) => {
       if (hits === null) return; // Cooldown or dead
 
       // Broadcast attack action for visual effect (even if missed)
-      io.to(roomId).emit('player_attack_action', {
+      io.to(String(roomId)).emit('player_attack_action', {
         attackerSocketId: socket.id,
         x: attacker.x,
         y: attacker.y,
@@ -272,7 +272,7 @@ const initSocket = (io) => {
 
       // Notify all players about the hits
       for (const hit of hits) {
-        io.to(roomId).emit('player_hit', {
+        io.to(String(roomId)).emit('player_hit', {
           attackerSocketId: socket.id,
           targetSocketId: hit.targetSocketId,
           damage: hit.event.damage,
@@ -281,7 +281,7 @@ const initSocket = (io) => {
         });
 
         if (hit.killed) {
-          io.to(roomId).emit('player_died', {
+          io.to(String(roomId)).emit('player_died', {
             targetSocketId: hit.targetSocketId,
             killerSocketId: socket.id,
             killerNickname: socket.nickname,
@@ -404,7 +404,7 @@ const initSocket = (io) => {
       await Room.update({ status: 'playing' }, { where: { id: roomId } });
 
       // Broadcast match start to ALL clients in the room
-      io.to(roomId).emit('match_started', {
+      io.to(String(roomId)).emit('match_started', {
         matchId: match.id,
         mapWidth: gameRoom.mapConfig.width,
         mapHeight: gameRoom.mapConfig.height,
@@ -422,11 +422,11 @@ const initSocket = (io) => {
         const { collected } = gameRoom.tick();
 
         // Broadcast full game state to all players in the room (Azure Web PubSub prefers multicast)
-        io.to(roomId).emit('game_state', gameRoom.getState());
+        io.to(String(roomId)).emit('game_state', gameRoom.getState());
 
         // Emit particle collection events
         if (collected && collected.length > 0) {
-          io.to(roomId).emit('particles_collected', collected);
+          io.to(String(roomId)).emit('particles_collected', collected);
         }
 
         // Leaderboard broadcast logic
@@ -436,7 +436,7 @@ const initSocket = (io) => {
           const scores = Array.from(gameRoom.players.values())
             .sort((a, b) => b.score - a.score)
             .map((p, i) => ({ rank: i + 1, nickname: p.nickname, score: p.score, kills: p.kills }));
-          io.to(roomId).emit('leaderboard_update', { scores });
+          io.to(String(roomId)).emit('leaderboard_update', { scores });
         }
       }, tickMs);
 
@@ -556,7 +556,7 @@ const initSocket = (io) => {
       }
 
       // Notify clients
-      io.to(roomId).emit('match_ended', {
+      io.to(String(roomId)).emit('match_ended', {
         results: results.rankings,
         winner: winner ? { nickname: winner.nickname } : null,
         duration: results.duration,
@@ -635,7 +635,7 @@ const initSocket = (io) => {
         /* non-critical */
       }
 
-      io.to(roomId).emit('player_left', {
+      io.to(String(roomId)).emit('player_left', {
         socketId: socket.id,
         nickname: socket.nickname,
         playerCount: gameRoom.getPlayerCount(),
