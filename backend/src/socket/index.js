@@ -91,8 +91,9 @@ const initSocket = (io) => {
         }
 
         // Join Socket.IO room ONLY after we confirm this is still the requested room
-        socket.join(roomId);
-        socket.currentRoomId = roomId;
+        const strRoomId = String(roomId);
+        socket.join(strRoomId);
+        socket.currentRoomId = strRoomId;
 
         // Check if THIS socket is already in the room (e.g. duplicate join request from spamming click)
         if (gameRoom.players.has(socket.id)) {
