@@ -75,6 +75,9 @@ const config = {
 
   // Azure Service Bus
   SERVICE_BUS_CONNECTION_STRING: process.env.SERVICE_BUS_CONNECTION_STRING || null,
+
+  // Azure Web PubSub
+  WEB_PUBSUB_CONNECTION_STRING: process.env.WEB_PUBSUB_CONNECTION_STRING || null,
 };
 
 config.loadKeyVaultSecrets = async () => {
@@ -124,6 +127,12 @@ config.loadKeyVaultSecrets = async () => {
     if (jwtSecret && jwtSecret.value) {
       config.JWT_SECRET = jwtSecret.value;
       console.log('[KeyVault] Successfully loaded JWT-SECRET');
+    }
+
+    const pubsubSecret = await client.getSecret('WEB-PUBSUB-CONNECTION-STRING').catch(() => null);
+    if (pubsubSecret && pubsubSecret.value) {
+      config.WEB_PUBSUB_CONNECTION_STRING = pubsubSecret.value;
+      console.log('[KeyVault] Successfully loaded WEB-PUBSUB-CONNECTION-STRING');
     }
   } catch (err) {
     console.error('[KeyVault] Error loading secrets:', err.message);
