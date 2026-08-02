@@ -1,6 +1,6 @@
 // src/socket/index.js — Socket.IO server setup and connection handler
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET, SERVICE_BUS_CONNECTION_STRING } = require('../config/env');
+const { JWT_SECRET, SERVICE_BUS_CONNECTION_STRING, GAME } = require('../config/env');
 const { User, Player, Room, Match, MatchPlayer, MatchEvent } = require('../models');
 const GameManager = require('../game/GameManager');
 const Matchmaker = require('../game/Matchmaker');
