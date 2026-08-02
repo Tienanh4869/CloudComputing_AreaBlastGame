@@ -1,6 +1,6 @@
 // src/socket/index.js — Socket.IO server setup and connection handler
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET, GAME, SERVICE_BUS_CONNECTION_STRING } = require('../config/env');
+const { JWT_SECRET, SERVICE_BUS_CONNECTION_STRING } = require('../config/env');
 const { User, Player, Room, Match, MatchPlayer, MatchEvent } = require('../models');
 const GameManager = require('../game/GameManager');
 const Matchmaker = require('../game/Matchmaker');
@@ -261,7 +261,7 @@ const initSocket = (io) => {
         io.to(roomId).emit('player_hit', {
           attackerSocketId: socket.id,
           targetSocketId: hit.targetSocketId,
-          damage: GAME.attackDamage,
+          damage: hit.event.damage,
           targetHp: hit.target.hp,
           killed: hit.killed,
         });
@@ -297,7 +297,7 @@ const initSocket = (io) => {
           saveMatchEvent(gameRoom.matchId, hit.killed ? 'player_died' : 'player_hit', {
             playerId: socket.playerId,
             targetId: hit.target.playerId,
-            data: { damage: GAME.attackDamage, killed: hit.killed },
+            data: { damage: hit.event.damage, killed: hit.killed },
           }).catch((e) => logger.warn('Event save failed:', e.message));
         }
       }

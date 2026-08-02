@@ -7,6 +7,7 @@ const { connectRedis, getPubSub } = require('./config/redis');
 const { initSocket } = require('./socket');
 const env = require('./config/env');
 const { PORT, CORS_ORIGIN, NODE_ENV } = env;
+const { initializeAppConfiguration } = require('./config/appConfiguration');
 const logger = require('./utils/logger');
 
 async function bootstrap() {
@@ -14,6 +15,9 @@ async function bootstrap() {
   if (env.loadKeyVaultSecrets) {
     await env.loadKeyVaultSecrets();
   }
+
+  // Load dynamic gameplay settings. Failures keep the safe local defaults.
+  await initializeAppConfiguration();
 
   // 1. Connect to PostgreSQL (must be required AFTER secrets are loaded)
   const { connectDB, sequelize } = require('./config/database');
