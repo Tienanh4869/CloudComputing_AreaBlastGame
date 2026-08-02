@@ -48,11 +48,23 @@ async function bootstrap() {
     transports: ['websocket', 'polling'],
   });
 
-  // 5.5 Setup Redis Adapter
-  const { pubClient, subClient } = getPubSub();
-  if (pubClient && subClient) {
-    io.adapter(createAdapter(pubClient, subClient));
-    logger.info('[Socket] Redis Adapter attached');
+  const { useAzureSocketIO } = require("@azure/web-pubsub-socket.io");
+
+  // 5.5 Setup Azure Web PubSub or Redis Adapter
+  if (env.WEB_PUBSUB_CONNECTION_STRING) {
+    logger.info('[Socket] Configuring Azure Web PubSub for Socket.IO...');
+    useAzureSocketIO(io, {
+      hub: "ArenaBlastHub",
+      connectionString: env.WEB_PUBSUB_CONNECTION_STRING
+    });
+    logger.info('[Socket] Azure Web PubSub attached');
+  } else {
+    // Fallback to Redis Adapter if Web PubSub is not configured
+    const { pubClient, subClient } = getPubSub();
+    if (pubClient && subClient) {
+      io.adapter(createAdapter(pubClient, subClient));
+      logger.info('[Socket] Redis Adapter attached (Fallback)');
+    }
   }
 
   // 6. Initialize game socket handlers
