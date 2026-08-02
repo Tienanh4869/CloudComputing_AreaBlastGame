@@ -119,6 +119,12 @@ config.loadKeyVaultSecrets = async () => {
       config.SERVICE_BUS_CONNECTION_STRING = sbSecret.value;
       console.log('[KeyVault] Successfully loaded SERVICE-BUS-CONNECTION-STRING');
     }
+
+    const jwtSecret = await client.getSecret('JWT-SECRET').catch(() => null);
+    if (jwtSecret && jwtSecret.value) {
+      config.JWT_SECRET = jwtSecret.value;
+      console.log('[KeyVault] Successfully loaded JWT-SECRET');
+    }
   } catch (err) {
     console.error('[KeyVault] Error loading secrets:', err.message);
   }
