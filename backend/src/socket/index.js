@@ -218,27 +218,40 @@ const initSocket = (io) => {
     // ── player_move: Handle movement input ──────────────────────
     socket.on('player_move', ({ dx, dy }) => {
       const roomId = socket.currentRoomId;
-      if (!roomId) return;
+      if (!roomId) {
+        logger.warn(`[Socket] player_move ignored: no currentRoomId for socket ${socket.id}`);
+        return;
+      }
 
       const gameRoom = GameManager.get(roomId);
-      if (!gameRoom) return;
+      if (!gameRoom) {
+        logger.warn(`[Socket] player_move ignored: gameRoom not found for roomId ${roomId}`);
+        return;
+      }
 
-      // Clamp input values to [-1, 1]
-      const cdx = Math.max(-1, Math.min(1, dx || 0));
-      const cdy = Math.max(-1, Math.min(1, dy || 0));
+      // cdx and cdy must be between -1 and 1.
+      const cdx = Math.max(-1, Math.min(1, Number(dx) || 0));
+      const cdy = Math.max(-1, Math.min(1, Number(dy) || 0));
+
       gameRoom.setPlayerMovement(socket.id, cdx, cdy);
     });
 
     // ── player_attack: Handle attack input ──────────────────────
     socket.on('player_attack', () => {
       const roomId = socket.currentRoomId;
-      if (!roomId) return;
+      if (!roomId) {
+        logger.warn(`[Socket] player_attack ignored: no currentRoomId for socket ${socket.id}`);
+        return;
+      }
 
       const gameRoom = GameManager.get(roomId);
-      if (!gameRoom || !gameRoom.isRunning) return;
+      if (!gameRoom || !gameRoom.isRunning) {
+        logger.warn(`[Socket] player_attack ignored: gameRoom not found or not running for roomId ${roomId}`);
+        return;
+      }
 
       const attacker = gameRoom.players.get(socket.id);
-      if (!attacker) return;
+      if (!attacker || !attacker.alive) return;
 
       // Try to execute attack
       const hits = gameRoom.playerAttack(socket.id);
