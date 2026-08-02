@@ -101,14 +101,15 @@ const GameManager = {
   /**
    * Get existing room.
    */
-  get(roomId) {
-    return activeRooms.get(roomId);
+  get(roomIdRaw) {
+    return activeRooms.get(String(roomIdRaw));
   },
 
   /**
    * Remove room after it ends.
    */
-  destroy(roomId) {
+  destroy(roomIdRaw) {
+    const roomId = String(roomIdRaw);
     const room = activeRooms.get(roomId);
     if (room) {
       room.stop();
