@@ -14,7 +14,11 @@ const GameManager = {
   /**
    * Create or return existing game room.
    */
-  async getOrCreate(roomId, roomCode) {
+  async getOrCreate(roomIdRaw, roomCode) {
+    // Ép kiểu roomId về chuỗi (String) để tránh lỗi bất đồng bộ loại dữ liệu (Int vs String)
+    // Nếu không ép kiểu, Map.has(15) và Map.has("15") sẽ tạo ra 2 phòng khác biệt trong bộ nhớ!
+    const roomId = String(roomIdRaw);
+
     // 1. If room exists, return immediately
     if (activeRooms.has(roomId)) {
       return activeRooms.get(roomId);
@@ -44,7 +48,9 @@ const GameManager = {
           if (response.ok) {
             data = await response.json();
             mapCache.set(mapUrl, data); // Cache it in memory!
-            logger.info(`[GameManager] Fetched and cached map ${randomMap}`);
+            logger.info(`[GameManager] Fetched and cached map ${randomMap} from Azure Blob Storage`);
+          } else {
+             throw new Error(`HTTP ${response.status}`);
           }
         }
         
@@ -52,7 +58,30 @@ const GameManager = {
           mapConfig = { ...mapConfig, ...data, url: mapUrl };
         }
       } catch (err) {
-        logger.warn(`[GameManager] Failed to fetch map JSON, using fallback`, err.message);
+        logger.warn(`[GameManager] Failed to fetch map JSON from Azure Blob, using fallback`, err.message);
+        // FALLBACK: Tránh việc map không có chướng ngại vật (Gây lỗi tàng hình)
+        const isIceMap = randomMap === 'ice_map.json';
+        mapConfig.theme = {
+          background: isIceMap ? "#001a33" : "#330000",
+          gridColor: isIceMap ? "rgba(0, 150, 255, 0.2)" : "rgba(255, 100, 0, 0.2)",
+          borderGlow: isIceMap ? "rgba(0, 200, 255, 0.8)" : "rgba(255, 50, 0, 0.8)",
+          particleColor: isIceMap ? "#80d4ff" : "#ff9933",
+          obstacleColor: isIceMap ? "rgba(0, 200, 255, 0.4)" : "rgba(255, 100, 0, 0.4)",
+          obstacleBorder: isIceMap ? "rgba(0, 255, 255, 0.8)" : "rgba(255, 200, 0, 0.8)",
+          obstacles: [
+            { x: 400, y: 300, w: 200, h: 50 },
+            { x: 800, y: 500, w: 50, h: 200 },
+            { x: 150, y: 150, w: 100, h: 100 },
+            { x: 1050, y: 200, w: 100, h: 100 }
+          ],
+          bushColor: isIceMap ? "rgba(100, 255, 100, 0.4)" : "rgba(200, 200, 50, 0.4)",
+          bushBorder: isIceMap ? "rgba(50, 200, 50, 0.6)" : "rgba(150, 150, 20, 0.6)",
+          bushes: [
+            { x: 100, y: 700, w: 150, h: 150 },
+            { x: 600, y: 100, w: 250, h: 120 },
+            { x: 1100, y: 600, w: 200, h: 200 }
+          ]
+        };
       }
 
       const room = new GameRoom(roomId, roomCode, mapConfig);
