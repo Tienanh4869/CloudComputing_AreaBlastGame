@@ -58,6 +58,16 @@ const useGameStore = create((set, get) => ({
 
   setMapDimensions: (width, height, url, theme) => set({ mapWidth: width, mapHeight: height, mapUrl: url, mapTheme: theme }),
 
+  addPlayer: (player) => set((state) => {
+    // Only add if not already in the list
+    if (state.players.some(p => p.socketId === player.socketId)) return state;
+    return { players: [...state.players, player] };
+  }),
+
+  removePlayer: (socketId) => set((state) => ({
+    players: state.players.filter(p => p.socketId !== socketId)
+  })),
+
   // Called on every game_state tick from server
   updateGameState: (state) => {
     const myId = get().mySocketId;

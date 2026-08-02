@@ -14,7 +14,8 @@ const GameManager = {
   /**
    * Create or return existing game room.
    */
-  async getOrCreate(roomId, roomCode) {
+  async getOrCreate(rawRoomId, roomCode) {
+    const roomId = String(rawRoomId);
     // 1. If room exists, return immediately
     if (activeRooms.has(roomId)) {
       return activeRooms.get(roomId);
@@ -72,14 +73,15 @@ const GameManager = {
   /**
    * Get existing room.
    */
-  get(roomId) {
-    return activeRooms.get(roomId);
+  get(rawRoomId) {
+    return activeRooms.get(String(rawRoomId));
   },
 
   /**
    * Remove room after it ends.
    */
-  destroy(roomId) {
+  destroy(rawRoomId) {
+    const roomId = String(rawRoomId);
     const room = activeRooms.get(roomId);
     if (room) {
       room.stop();

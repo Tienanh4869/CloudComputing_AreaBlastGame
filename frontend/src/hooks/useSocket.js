@@ -109,12 +109,14 @@ export const useSocket = () => {
     });
 
     // Player events
-    socket.on('player_joined', ({ nickname }) => {
-      toast(`🎮 ${nickname} joined`, { duration: 2000 });
+    socket.on('player_joined', (data) => {
+      useGameStore.getState().addPlayer(data);
+      toast(`🎮 ${data.nickname} joined`, { duration: 2000 });
     });
 
-    socket.on('player_left', ({ nickname }) => {
-      toast(`👋 ${nickname} left`, { duration: 2000 });
+    socket.on('player_left', (data) => {
+      useGameStore.getState().removePlayer(data.socketId);
+      toast(`👋 ${data.nickname} left`, { duration: 2000 });
     });
 
     // Attack action (visual effect)
