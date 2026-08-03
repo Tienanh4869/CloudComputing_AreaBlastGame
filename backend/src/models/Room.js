@@ -33,7 +33,7 @@ const Room = sequelize.define('Room', {
   max_players: {
     type: DataTypes.INTEGER,
     defaultValue: 4,
-    validate: { min: 2, max: 8 },
+    validate: { min: 2, max: 50 },
   },
   created_by: {
     type: DataTypes.UUID,

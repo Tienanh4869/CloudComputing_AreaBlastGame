@@ -101,6 +101,7 @@ const initSocket = (io) => {
           socket.emit('room_joined', {
             roomId: roomCode || room.code,
             state: gameRoom.getState(),
+            matchStatus: room.status,
             mapWidth: gameRoom.mapConfig.width,
             mapHeight: gameRoom.mapConfig.height,
             mapUrl: gameRoom.mapConfig.url,
@@ -146,6 +147,7 @@ const initSocket = (io) => {
         socket.emit('room_joined', {
           roomId: roomCode || room.code,
           state: gameRoom.getState(),
+          matchStatus: room.status, // pass status so frontend knows if it's playing
           mapWidth: gameRoom.mapConfig.width,
           mapHeight: gameRoom.mapConfig.height,
           mapUrl: gameRoom.mapConfig.url,
