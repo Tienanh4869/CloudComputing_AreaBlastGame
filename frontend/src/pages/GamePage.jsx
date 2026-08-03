@@ -266,7 +266,6 @@ export default function GamePage() {
             onAttack={sendAttack}
             mapWidth={mapWidth}
             mapHeight={mapHeight}
-            mapUrl={mapUrl}
             joystickRef={joystickRef}
           />
           <MobileControls joystickRef={joystickRef} onAttack={sendAttack} />
