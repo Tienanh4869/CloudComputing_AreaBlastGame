@@ -2,6 +2,7 @@
 const GameRoom = require('./GameRoom');
 const logger = require('../utils/logger');
 const { metrics } = require('../utils/metrics');
+const { getMapRotation } = require('../config/appConfiguration');
 
 // Map of roomId → GameRoom instance
 const activeRooms = new Map();
@@ -88,7 +89,9 @@ const GameManager = {
 
     // 3. Create the promise for room creation
     const creationPromise = (async () => {
-      const maps = ['ice_map.json', 'fire_map.json'];
+      // Read the current rotation only when creating a room. Existing rooms
+      // keep their map so a configuration refresh cannot disrupt a match.
+      const maps = getMapRotation();
       const randomMap = maps[Math.floor(Math.random() * maps.length)];
       const isIceMap = randomMap === 'ice_map.json';
       
