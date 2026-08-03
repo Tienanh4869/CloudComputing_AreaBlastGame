@@ -51,7 +51,7 @@ const config = {
     tickRate: parseInt(process.env.GAME_TICK_RATE) || 30,
     mapWidth: parseInt(process.env.MAP_WIDTH) || 3000,
     mapHeight: parseInt(process.env.MAP_HEIGHT) || 3000,
-    particleCount: parseInt(process.env.PARTICLE_COUNT) || 80,
+    particleCount: parseInt(process.env.PARTICLE_COUNT) || 150,
     playerSpeed: parseFloat(process.env.PLAYER_SPEED) || 3.5,
     playerHp: parseInt(process.env.PLAYER_HP) || 100,
     attackDamage: parseInt(process.env.ATTACK_DAMAGE) || 25,
