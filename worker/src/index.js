@@ -148,11 +148,12 @@ app.serviceBusQueue('matchResultsProcessor', {
                 const query = `
                     UPDATE players 
                     SET 
-                        total_score = total_score + $1, 
-                        kills = kills + $2,
-                        deaths = deaths + $3,
-                        wins = wins + $4,
-                        losses = losses + $5
+                        total_score = COALESCE(total_score, 0) + $1,
+                        kills = COALESCE(kills, 0) + $2,
+                        deaths = COALESCE(deaths, 0) + $3,
+                        wins = COALESCE(wins, 0) + $4,
+                        losses = COALESCE(losses, 0) + $5,
+                        updated_at = NOW()
                     WHERE id = $6
                 `;
                 await pool.query(query, [score, kills, deaths, isWin, isLoss, playerId]);
@@ -184,7 +185,10 @@ app.http('leaderboardUpdater', {
             const { event, playerId } = body;
             const score = Number(body.score) || 0;
             const kills = Number(body.kills) || 0;
-
+            const deaths = Number(body.deaths) || 0;
+            const rank = Number(body.rank) || 0;
+            const isWin = rank === 1 ? 1 : 0;
+            const isLoss = rank > 1 ? 1 : 0;
             if (event !== 'match_ended' || !playerId) {
                 return {
                     status: 400,
@@ -217,7 +221,34 @@ app.http('leaderboardUpdater', {
                 `,
                 [playerId, score, kills]
             );
+            const playerResult = await client.query(
+                `
+                    UPDATE players
+                    SET
+                        total_score = COALESCE(total_score, 0) + $1,
+                        kills = COALESCE(kills, 0) + $2,
+                        deaths = COALESCE(deaths, 0) + $3,
+                        wins = COALESCE(wins, 0) + $4,
+                        losses = COALESCE(losses, 0) + $5,
+                        updated_at = NOW()
+                    WHERE id = $6
+                    RETURNING total_score
+                `,
+                [
+                    score,
+                    kills,
+                    deaths,
+                    isWin,
+                    isLoss,
+                    playerId
+                ]
+            );
 
+            if (playerResult.rowCount === 0) {
+                throw new Error(
+                    `Player ${playerId} not found when updating match score`
+                );
+            }
             await client.query(`
                 UPDATE leaderboard_scores AS leaderboard
                 SET rank = ranking.rank
