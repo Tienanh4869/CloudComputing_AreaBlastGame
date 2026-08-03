@@ -71,6 +71,23 @@ export default function GamePage() {
     ? matchLeaderboard
     : players.slice().sort((a, b) => b.score - a.score);
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      try {
+        if (window.screen?.orientation?.lock) {
+          window.screen.orientation.lock('landscape').catch(() => {});
+        }
+      } catch (_) {}
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setIsFullscreen(false);
+    }
+  };
+
   return (
     <div style={{
       width: '100vw',
@@ -84,7 +101,7 @@ export default function GamePage() {
     }}>
 
       {/* ── Top HUD ─────────────────────────────────────────── */}
-      <div style={{
+      <div className="game-top-hud" style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -177,8 +194,8 @@ export default function GamePage() {
           </div>
         )}
 
-        {/* Right: Score + Kills + Ranking button on mobile */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Right: Score + Kills + Ranking + Fullscreen */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Pts</div>
             <div className="score-display" style={{ fontSize: '0.95rem' }}>{myScore}</div>
@@ -200,9 +217,20 @@ export default function GamePage() {
             🏆
           </button>
 
+          {/* Fullscreen / Landscape Mode Toggle Button */}
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ padding: '4px 8px', fontSize: '0.82rem' }}
+            onClick={toggleFullscreen}
+            title="Toàn màn hình / Xoay ngang"
+            aria-label="Toggle Fullscreen"
+          >
+            {isFullscreen ? '✕' : '⛶'}
+          </button>
+
           {/* Desktop Controls Hint */}
           <div className="desktop-only" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
-            WASD Move<br />SPACE Attack
+            WASD / Mouse<br />SPACE / Click
           </div>
         </div>
       </div>

@@ -41,7 +41,10 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
   // Subscribe to game state directly for rendering
   const getState = () => useGameStore.getState();
 
-  // ── Input Handling ─────────────────────────────────────────
+  // ── Input Handling & Continuous Steering ───────────────────
+  const headingRef = useRef({ dx: 1, dy: 0 }); // Continuous gliding heading
+  const mousePosRef = useRef({ x: 0, y: 0, active: false });
+  const lastMoveRef = useRef({ dx: 0, dy: 0, lastSent: 0 });
 
   const handleKeyDown = useCallback((e) => {
     keysRef.current.add(e.code);
@@ -55,6 +58,28 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
     keysRef.current.delete(e.code);
   }, []);
 
+  const handleMouseMove = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const worldX = (e.clientX - rect.left) * scaleX;
+    const worldY = (e.clientY - rect.top) * scaleY;
+    mousePosRef.current = { x: worldX, y: worldY, active: true };
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    mousePosRef.current.active = false;
+  }, []);
+
+  const handleCanvasClick = useCallback((e) => {
+    if (e.button === 0) { // Left click
+      onAttack?.();
+    }
+  }, [onAttack]);
+
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -65,8 +90,6 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
   }, [handleKeyDown, handleKeyUp]);
 
   // ── Game Loop (client-side: read input, render) ────────────
-  const lastMoveRef = useRef({ dx: 0, dy: 0, lastSent: 0 });
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -75,36 +98,57 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
 
     const loop = () => {
       const keys = keysRef.current;
-      // WASD or Arrow keys
       let dx = 0, dy = 0;
+      let hasActiveSteer = false;
+
+      // 1. Keyboard WASD / Arrows
       if (keys.has('KeyW') || keys.has('ArrowUp'))    dy -= 1;
       if (keys.has('KeyS') || keys.has('ArrowDown'))  dy += 1;
       if (keys.has('KeyA') || keys.has('ArrowLeft'))  dx -= 1;
       if (keys.has('KeyD') || keys.has('ArrowRight')) dx += 1;
 
-      // Merge with Joystick input (analog dx, dy from mobile/touch)
-      if (joystickRef && joystickRef.current) {
-        if (Math.abs(joystickRef.current.dx) > 0.05 || Math.abs(joystickRef.current.dy) > 0.05) {
-          dx = joystickRef.current.dx;
-          dy = joystickRef.current.dy;
+      if (keys.size > 0 && (dx !== 0 || dy !== 0)) {
+        hasActiveSteer = true;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) { dx /= len; dy /= len; }
+        headingRef.current = { dx, dy };
+      } else if (joystickRef && joystickRef.current && (Math.abs(joystickRef.current.dx) > 0.05 || Math.abs(joystickRef.current.dy) > 0.05)) {
+        // 2. Mobile Touch Joystick steering
+        hasActiveSteer = true;
+        dx = joystickRef.current.dx;
+        dy = joystickRef.current.dy;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          headingRef.current = { dx: dx / len, dy: dy / len };
+        }
+      } else if (mousePosRef.current.active) {
+        // 3. Laptop Mouse steering (steer toward cursor)
+        const myPlayer = getState().players.find(p => p.socketId === playerSocketId);
+        if (myPlayer) {
+          const mdx = mousePosRef.current.x - myPlayer.x;
+          const mdy = mousePosRef.current.y - myPlayer.y;
+          const dist = Math.hypot(mdx, mdy);
+          if (dist > 30) {
+            hasActiveSteer = true;
+            dx = mdx / dist;
+            dy = mdy / dist;
+            headingRef.current = { dx, dy };
+          }
         }
       }
 
-      // Normalize diagonal movement from keyboard
-      if (keys.size > 0 && (dx !== 0 || dy !== 0) && (!joystickRef?.current?.dx && !joystickRef?.current?.dy)) {
-        const len = Math.hypot(dx, dy);
-        if (len > 0) {
-          dx /= len;
-          dy /= len;
-        }
+      // 4. Continuous auto-glide navigation: keep moving in heading direction
+      if (!hasActiveSteer && (headingRef.current.dx !== 0 || headingRef.current.dy !== 0)) {
+        dx = headingRef.current.dx;
+        dy = headingRef.current.dy;
       }
 
       const now = performance.now();
-      const moved = Math.abs(dx - lastMoveRef.current.dx) > 0.01 || Math.abs(dy - lastMoveRef.current.dy) > 0.01;
+      const moved = Math.abs(dx - lastMoveRef.current.dx) > 0.02 || Math.abs(dy - lastMoveRef.current.dy) > 0.02;
       const isMoving = Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01;
-      const shouldResend = isMoving && (now - lastMoveRef.current.lastSent > 100);
+      const shouldResend = isMoving && (now - lastMoveRef.current.lastSent > 120);
 
-      // Send when movement direction changes OR when stopping (dx=0, dy=0) OR periodically while moving
+      // Send movement heading to server
       if (moved || shouldResend) {
         lastMoveRef.current = { dx, dy, lastSent: now };
         onMove?.(dx, dy);
@@ -419,6 +463,9 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
       ref={canvasRef}
       width={mapWidth || 1200}
       height={mapHeight || 800}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      onMouseDown={handleCanvasClick}
       style={{
         display: 'block',
         borderRadius: 8,
@@ -426,6 +473,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
         maxWidth: '100%',
         maxHeight: '100%',
         objectFit: 'contain',
+        touchAction: 'none',
       }}
       tabIndex={0}
     />

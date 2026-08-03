@@ -651,14 +651,42 @@ h1, h2, h3, h4, h5, h6 {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform 0.08s ease, filter 0.08s ease;
 }
 
 .attack-btn:active, .attack-btn.active {
-  transform: scale(0.92);
-  box-shadow: 0 2px 12px rgba(255, 71, 87, 0.8), inset 0 0 15px rgba(0, 0, 0, 0.5);
-  border-color: #fff;
+  transform: scale(0.93);
+  filter: brightness(1.15);
+  box-shadow: 0 3px 12px rgba(255, 71, 87, 0.7);
+}
+
+/* ── Mobile Landscape Specific Optimization ───────────────────── */
+@media (orientation: landscape) and (max-height: 550px) {
+  .game-top-hud {
+    min-height: 38px !important;
+    padding: 2px 10px !important;
+  }
+  .joystick-zone {
+    width: 105px !important;
+    height: 105px !important;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    left: calc(12px + env(safe-area-inset-left, 0px)) !important;
+  }
+  .joystick-knob {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .attack-btn-zone {
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    right: calc(12px + env(safe-area-inset-right, 0px)) !important;
+  }
+  .attack-btn {
+    width: 68px !important;
+    height: 68px !important;
+  }
 }
 
 /* ── General Responsive Adjustments ──────────────────────────── */
@@ -701,4 +729,5 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 1.8rem !important;
   }
 }
+
 
