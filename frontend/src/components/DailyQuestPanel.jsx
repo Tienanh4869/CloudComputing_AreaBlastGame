@@ -142,45 +142,48 @@ export default function DailyQuestPanel() {
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    gap: 12,
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 8,
                     marginBottom: 8,
                   }}
                 >
-                  <span style={{ fontWeight: 700 }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>
                     {QUEST_ICONS[quest.code] || '🎯'} {quest.title}
                   </span>
 
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            whiteSpace: 'nowrap',
-                        }}
-                        >
-                        <span
-                            style={{
-                            color: 'var(--accent-gold)',
-                            fontSize: '0.85rem',
-                            fontWeight: 700,
-                            }}
-                        >
-                            🎁 +{quest.reward || 0} điểm
-                        </span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: 'var(--accent-gold)',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                      }}
+                    >
+                      🎁 +{quest.reward || 0} điểm
+                    </span>
 
-                        <span
-                            style={{
-                            color: quest.completed
-                                ? 'var(--accent-success)'
-                                : 'var(--text-secondary)',
-                            fontSize: '0.85rem',
-                            }}
-                        >
-                            {quest.completed
-                            ? '✓ Hoàn thành'
-                            : getProgressText(quest)}
-                        </span>
-                    </div>
+                    <span
+                      style={{
+                        color: quest.completed
+                          ? 'var(--accent-success)'
+                          : 'var(--text-secondary)',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {quest.completed
+                        ? '✓ Hoàn thành'
+                        : getProgressText(quest)}
+                    </span>
+                  </div>
                 </div>
 
                 <div

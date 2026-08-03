@@ -300,24 +300,36 @@ h1, h2, h3, h4, h5, h6 {
 .animate-glow      { animation: glow 2s ease infinite; }
 .animate-slide-in  { animation: slideIn 0.3s ease forwards; }
 
+/* ── Responsive Display Utilities ────────────────────────────── */
+.desktop-only { display: flex; }
+.mobile-only  { display: none; }
+
+@media (max-width: 768px) {
+  .desktop-only { display: none !important; }
+  .mobile-only  { display: flex !important; }
+}
+
 /* ── Nav ─────────────────────────────────────────────────────── */
 .navbar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
+  height: 64px;
   z-index: 100;
-  background: rgba(10, 14, 26, 0.95);
-  backdrop-filter: blur(12px);
+  background: rgba(10, 14, 26, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border-color);
-  padding: 12px 24px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .navbar-brand {
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.5px;
 }
@@ -332,17 +344,141 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-secondary);
   text-decoration: none;
   padding: 8px 14px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
   transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .nav-link:hover, .nav-link.active {
-  color: var(--text-primary);
+  color: #fff;
   background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(108, 99, 255, 0.15);
 }
 
-/* ── HUD Overlay ─────────────────────────────────────────────── */
+.nav-user-pill:hover {
+  border-color: var(--accent-primary) !important;
+  background: var(--bg-card-hover) !important;
+}
+
+/* ── Mobile Drawer ───────────────────────────────────────────── */
+.mobile-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 200;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mobile-drawer {
+  width: 290px;
+  max-width: 85vw;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.5);
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.mobile-drawer-header {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+}
+
+.mobile-drawer-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.mobile-drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 1rem;
+  background: var(--bg-card);
+  border: 1px solid transparent;
+  transition: all var(--transition);
+}
+
+.mobile-drawer-item.active, .mobile-drawer-item:hover {
+  color: #fff;
+  background: rgba(108, 99, 255, 0.15);
+  border-color: var(--border-glow);
+}
+
+/* ── Floating Chat for Mobile ────────────────────────────────── */
+.floating-chat-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, var(--accent-primary), #8B5CF6);
+  color: white;
+  border: none;
+  border-radius: 99px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 6px 20px rgba(108, 99, 255, 0.4);
+  cursor: pointer;
+  transition: transform var(--transition);
+}
+.floating-chat-btn:active {
+  transform: scale(0.95);
+}
+
+.mobile-chat-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.mobile-chat-content {
+  height: 75vh;
+  background: var(--bg-secondary);
+  border-radius: 20px 20px 0 0;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* ── HUD & Game Screen ───────────────────────────────────────── */
 .hud {
   position: absolute;
   top: 0;
@@ -404,12 +540,13 @@ h1, h2, h3, h4, h5, h6 {
 /* ── Kill feed ───────────────────────────────────────────────── */
 .killfeed {
   position: absolute;
-  top: 80px;
+  top: 70px;
   right: 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   pointer-events: none;
+  max-width: 200px;
 }
 
 .killfeed-entry {
@@ -425,61 +562,58 @@ h1, h2, h3, h4, h5, h6 {
   to { opacity: 0; transform: translateX(20px); }
 }
 
-/* ── Responsive ──────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .container { padding: 0 16px; }
-  .card { padding: 16px; }
-  .navbar { padding: 10px 16px; }
-  
-  .game-sidebar {
-    display: none !important;
-  }
-}
-
-/* ── Mobile Controls (Touch) ─────────────────────────────────── */
-.mobile-controls {
-  display: none;
+/* ── Mobile Touch Controls ───────────────────────────────────── */
+.mobile-controls-layer {
   position: absolute;
-  bottom: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none; /* Let canvas receive clicks unless hitting joystick/buttons */
-  z-index: 100;
-}
-
-/* Show only on touch devices */
-@media (pointer: coarse) {
-  .mobile-controls {
-    display: block;
-  }
+  pointer-events: none;
+  z-index: 80;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .joystick-zone {
   position: absolute;
-  bottom: 30px;
-  left: 30px;
-  width: 120px;
-  height: 120px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: calc(20px + env(safe-area-inset-left, 0px));
+  width: 140px;
+  height: 140px;
   pointer-events: auto;
+  touch-action: none;
 }
 
 .joystick-base {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: rgba(10, 14, 26, 0.4);
-  border: 2px solid rgba(108, 99, 255, 0.3);
-  box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+  background: rgba(15, 22, 41, 0.6);
+  border: 2px solid rgba(108, 99, 255, 0.4);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(108, 99, 255, 0.2);
   position: relative;
 }
 
-.joystick-knob {
-  width: 50px;
-  height: 50px;
+.joystick-dir-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, var(--accent-secondary), var(--accent-primary));
-  box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 -2px 5px rgba(0,0,0,0.3);
+  background: rgba(255, 255, 255, 0.3);
+}
+.joystick-dir-dot.top    { top: 12px; left: 50%; transform: translateX(-50%); }
+.joystick-dir-dot.bottom { bottom: 12px; left: 50%; transform: translateX(-50%); }
+.joystick-dir-dot.left   { left: 12px; top: 50%; transform: translateY(-50%); }
+.joystick-dir-dot.right  { right: 12px; top: 50%; transform: translateY(-50%); }
+
+.joystick-knob {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--accent-secondary), var(--accent-primary));
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 212, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.6);
   position: absolute;
   top: 50%;
   left: 50%;
@@ -489,28 +623,75 @@ h1, h2, h3, h4, h5, h6 {
 
 .attack-btn-zone {
   position: absolute;
-  bottom: 30px;
-  right: 30px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  right: calc(20px + env(safe-area-inset-right, 0px));
   pointer-events: auto;
+  touch-action: none;
 }
 
 .attack-btn {
-  width: 80px;
-  height: 80px;
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #ff6b81, var(--accent-danger));
-  border: 3px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 15px rgba(255, 71, 87, 0.4);
+  background: radial-gradient(circle at 35% 35%, #FF6B81, var(--accent-danger));
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 6px 20px rgba(255, 71, 87, 0.5), inset 0 -3px 8px rgba(0, 0, 0, 0.3);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
   color: white;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
 }
-.attack-btn:active {
-  transform: scale(0.9);
-  box-shadow: 0 2px 10px rgba(255, 71, 87, 0.6);
+
+.attack-btn:active, .attack-btn.active {
+  transform: scale(0.92);
+  box-shadow: 0 2px 12px rgba(255, 71, 87, 0.8), inset 0 0 15px rgba(0, 0, 0, 0.5);
+  border-color: #fff;
 }
+
+/* ── General Responsive Adjustments ──────────────────────────── */
+@media (max-width: 900px) {
+  .lobby-chat-sidebar-desktop {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 16px;
+  }
+  .card {
+    padding: 16px;
+    border-radius: var(--radius-md);
+  }
+  .btn-lg {
+    padding: 12px 20px;
+    font-size: 1rem;
+  }
+  .game-sidebar {
+    display: none !important;
+  }
+  
+  /* Prevent iOS input zoom */
+  .form-input {
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px;
+  }
+  .container {
+    padding: 0 12px;
+  }
+  h1 {
+    font-size: 1.8rem !important;
+  }
+}
+

@@ -85,7 +85,7 @@ export default function RegisterPage() {
           <h2 style={{ marginBottom: 24, fontSize: '1.3rem' }}>Create Account</h2>
 
           <form onSubmit={handleSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
               <div className="form-group">
                 <label className="form-label">Username</label>
                 <input id="reg-username" className="form-input" type="text" name="username"
@@ -115,7 +115,7 @@ export default function RegisterPage() {
             </div>
 
             {/* Image Customization */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
               <div className="form-group">
                 <label className="form-label">Avatar Image (Optional)</label>
                 <input className="form-input" type="file" accept="image/*"
