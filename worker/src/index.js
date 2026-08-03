@@ -132,9 +132,8 @@ async function grantQuestReward(
 
     return true;
 }
-if (process.env.SERVICE_BUS_CONNECTION_STRING) {
 app.serviceBusQueue('matchResultsProcessor', {
-    connection: 'SERVICE_BUS_CONNECTION_STRING',
+    connection: 'SERVICE_BUS_DAILY',
     queueName: 'match-results',
     handler: async (message, context) => {
         context.log('[Worker] Nhận dữ liệu kết thúc trận từ Service Bus:', message);
@@ -160,11 +159,16 @@ app.serviceBusQueue('matchResultsProcessor', {
                 context.log(`[Worker] Cập nhật thành công điểm cho Player ${playerId}`);
             }
         } catch (err) {
-            context.log.error('[Worker] Lỗi xử lý message:', err.message);
+            context.error(
+                '[Worker] Lỗi xử lý message:',
+                err
+            );
+
+            throw err;
         }
     }
 });
-}
+
 /**
  * Giữ lại HTTP Function leaderboardUpdater đang được backend sử dụng.
  */
