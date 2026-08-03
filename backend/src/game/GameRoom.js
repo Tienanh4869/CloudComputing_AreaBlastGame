@@ -3,7 +3,7 @@
 // For multi-instance scalability: move state to Redis (see SCALABILITY.md)
 
 const { GAME } = require('../config/env');
-const { circleCollide, circleRectCollide, lineRectCollide, clampToMap, normalizeMovement, randomMapPosition } = require('./Physics');
+const { circleCollide, circleRectCollide, resolveCircleRectCollision, lineRectCollide, clampToMap, normalizeMovement, randomMapPosition } = require('./Physics');
 const { generateId } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
@@ -341,23 +341,61 @@ class GameRoom {
 
       player.radius = 16 + Math.min((player.score / 50) * 5, 40);
 
-      let newPos = clampToMap({
-        x: player.x + player.dx,
-        y: player.y + player.dy,
-      }, this.mapConfig.width, this.mapConfig.height, player.radius);
-
-      // Check collision with obstacles
+      // 1. If player grew bigger and penetrates an obstacle, gently push them away so they NEVER get stuck
       if (this.mapConfig.theme?.obstacles) {
         for (const obs of this.mapConfig.theme.obstacles) {
-          if (circleRectCollide({ x: newPos.x, y: newPos.y, radius: player.radius }, obs)) {
-            newPos = { x: player.x, y: player.y };
-            break;
+          const resolved = resolveCircleRectCollision({ x: player.x, y: player.y, radius: player.radius }, obs);
+          player.x = resolved.x;
+          player.y = resolved.y;
+        }
+      }
+
+      // 2. Smooth movement with separate X/Y slide against obstacles
+      if (player.dx !== 0 || player.dy !== 0) {
+        // Try X movement
+        let nextX = player.x + player.dx;
+        let collideX = false;
+        if (this.mapConfig.theme?.obstacles) {
+          for (const obs of this.mapConfig.theme.obstacles) {
+            if (circleRectCollide({ x: nextX, y: player.y, radius: player.radius }, obs)) {
+              collideX = true;
+              break;
+            }
+          }
+        }
+        if (!collideX) {
+          player.x = nextX;
+        }
+
+        // Try Y movement
+        let nextY = player.y + player.dy;
+        let collideY = false;
+        if (this.mapConfig.theme?.obstacles) {
+          for (const obs of this.mapConfig.theme.obstacles) {
+            if (circleRectCollide({ x: player.x, y: nextY, radius: player.radius }, obs)) {
+              collideY = true;
+              break;
+            }
+          }
+        }
+        if (!collideY) {
+          player.y = nextY;
+        }
+
+        // Post-move safety pushout
+        if (this.mapConfig.theme?.obstacles) {
+          for (const obs of this.mapConfig.theme.obstacles) {
+            const resolved = resolveCircleRectCollision({ x: player.x, y: player.y, radius: player.radius }, obs);
+            player.x = resolved.x;
+            player.y = resolved.y;
           }
         }
       }
 
-      player.x = newPos.x;
-      player.y = newPos.y;
+      // 3. Keep within map boundaries
+      const clamped = clampToMap({ x: player.x, y: player.y }, this.mapConfig.width, this.mapConfig.height, player.radius);
+      player.x = clamped.x;
+      player.y = clamped.y;
 
       // Update Bushes logic
       player.inBushId = null;
@@ -456,6 +494,7 @@ class GameRoom {
     return {
       roomId: this.roomId,
       mapUrl: this.mapConfig.url,
+      mapTheme: this.mapConfig.theme,
       players: playersArray,
       particles: Array.from(this.particles.values()),
       safeZone: { x: cx, y: cy, radius: safeZoneRadius },
