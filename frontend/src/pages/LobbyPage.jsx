@@ -509,11 +509,11 @@ export default function LobbyPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Max Players: {newRoom.max_players}</label>
-                <input type="range" min={2} max={8} value={newRoom.max_players}
+                <input type="range" min={2} max={50} value={newRoom.max_players}
                   onChange={(e) => setNewRoom((r) => ({ ...r, max_players: +e.target.value }))}
                   style={{ width: '100%', accentColor: 'var(--accent-primary)' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  <span>2</span><span>8</span>
+                  <span>2</span><span>50</span>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>

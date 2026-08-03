@@ -41,7 +41,7 @@ router.post('/',
   authenticate,
   [
     body('name').trim().isLength({ min: 2, max: 100 }).withMessage('Room name: 2-100 chars'),
-    body('max_players').optional().isInt({ min: 2, max: 8 }),
+    body('max_players').optional().isInt({ min: 2, max: 50 }),
   ],
   async (req, res, next) => {
     try {
