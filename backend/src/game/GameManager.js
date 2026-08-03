@@ -16,9 +16,9 @@ function generateProceduralTerrain(width = 1200, height = 800) {
   const bushes = [];
   const minMargin = 80;
 
-  // 1. Generate 6 - 10 random obstacles
-  const numObstacles = Math.floor(Math.random() * 5) + 6;
-  for (let attempt = 0; attempt < numObstacles * 3 && obstacles.length < numObstacles; attempt++) {
+  // 1. Generate 5 random obstacles
+  const numObstacles = 5;
+  for (let attempt = 0; attempt < 50 && obstacles.length < numObstacles; attempt++) {
     const shapeType = Math.floor(Math.random() * 3);
     let w, h;
     if (shapeType === 0) {
@@ -47,9 +47,9 @@ function generateProceduralTerrain(width = 1200, height = 800) {
     }
   }
 
-  // 2. Generate 7 - 12 random bushes
-  const numBushes = Math.floor(Math.random() * 6) + 7;
-  for (let attempt = 0; attempt < numBushes * 3 && bushes.length < numBushes; attempt++) {
+  // 2. Generate 4 random bushes
+  const numBushes = 4;
+  for (let attempt = 0; attempt < 40 && bushes.length < numBushes; attempt++) {
     const w = Math.floor(Math.random() * 80) + 120;
     const h = Math.floor(Math.random() * 60) + 100;
     const x = Math.floor(Math.random() * (width - w - minMargin * 2)) + minMargin;
