@@ -1,6 +1,7 @@
-// src/components/GameCanvas.jsx — Camera-based Canvas 2D Renderer for large EvoWars.io-style maps
-import { useEffect, useRef, useCallback } from 'react';
+// src/components/GameCanvas.jsx — Canvas 2D game renderer
+import { useEffect, useRef, useCallback, useState } from 'react';
 import useGameStore from '../store/gameStore';
+import useAuthStore from '../store/authStore';
 
 // ── Renderer constants ────────────────────────────────────────
 const PLAYER_RADIUS = 16;
@@ -20,19 +21,30 @@ function getImage(url) {
   return img;
 }
 
-export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joystickRef }) {
+export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapUrl, joystickRef }) {
   const canvasRef = useRef(null);
   const keysRef = useRef(new Set());
   const frameRef = useRef(null);
+  const { roomId, mapTheme, particles, players, matchStatus } = useGameStore(s => ({
+    roomId: s.roomId,
+    mapTheme: s.mapTheme,
+    particles: s.particles,
+    players: s.players,
+    matchStatus: s.matchStatus,
+  }));
+  const playerSocketId = useGameStore((s) => s.mySocketId);
+  const { player: myProfile } = useAuthStore();
 
-  // Subscribe to game state directly for rendering without triggering React re-renders
+  // No longer fetching mapTheme from Blob Storage on frontend.
+  // We use mapTheme received from backend via socket.
+
+  // Subscribe to game state directly for rendering
   const getState = () => useGameStore.getState();
 
   // ── Input Handling & Continuous Steering ───────────────────
-  const headingRef = useRef({ dx: 1, dy: 0 });
+  const headingRef = useRef({ dx: 1, dy: 0 }); // Continuous gliding heading
   const mousePosRef = useRef({ x: 0, y: 0, active: false });
   const lastMoveRef = useRef({ dx: 0, dy: 0, lastSent: 0 });
-  const cameraRef = useRef({ x: 0, y: 0 });
 
   const handleKeyDown = useCallback((e) => {
     keysRef.current.add(e.code);
@@ -51,14 +63,11 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
-    // Store screen-space mouse position (relative to canvas element)
-    mousePosRef.current = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      active: true,
-      canvasW: rect.width,
-      canvasH: rect.height,
-    };
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const worldX = (e.clientX - rect.left) * scaleX;
+    const worldY = (e.clientY - rect.top) * scaleY;
+    mousePosRef.current = { x: worldX, y: worldY, active: true };
   }, []);
 
   const handleMouseLeave = useCallback(() => {
@@ -66,7 +75,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
   }, []);
 
   const handleCanvasClick = useCallback((e) => {
-    if (e.button === 0) {
+    if (e.button === 0) { // Left click
       onAttack?.();
     }
   }, [onAttack]);
@@ -80,37 +89,14 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  // ── Resize canvas to fill container ────────────────────────
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const resizeCanvas = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = parent.clientWidth;
-      const h = parent.clientHeight;
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-      canvas.style.width = w + 'px';
-      canvas.style.height = h + 'px';
-    };
-    resizeCanvas();
-    const ro = new ResizeObserver(resizeCanvas);
-    ro.observe(canvas.parentElement);
-    return () => ro.disconnect();
-  }, []);
-
-  // ── Game Loop ──────────────────────────────────────────────
+  // ── Game Loop (client-side: read input, render) ────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext('2d');
 
     const loop = () => {
-      const state = getState();
-      const myId = state.mySocketId;
       const keys = keysRef.current;
       let dx = 0, dy = 0;
       let hasActiveSteer = false;
@@ -136,23 +122,22 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
           headingRef.current = { dx: dx / len, dy: dy / len };
         }
       } else if (mousePosRef.current.active) {
-        // 3. Laptop Mouse steering (steer toward cursor position in screen space)
-        const cW = mousePosRef.current.canvasW || canvas.clientWidth;
-        const cH = mousePosRef.current.canvasH || canvas.clientHeight;
-        const centerX = cW / 2;
-        const centerY = cH / 2;
-        const mdx = mousePosRef.current.x - centerX;
-        const mdy = mousePosRef.current.y - centerY;
-        const dist = Math.hypot(mdx, mdy);
-        if (dist > 25) {
-          hasActiveSteer = true;
-          dx = mdx / dist;
-          dy = mdy / dist;
-          headingRef.current = { dx, dy };
+        // 3. Laptop Mouse steering (steer toward cursor)
+        const myPlayer = getState().players.find(p => p.socketId === playerSocketId);
+        if (myPlayer) {
+          const mdx = mousePosRef.current.x - myPlayer.x;
+          const mdy = mousePosRef.current.y - myPlayer.y;
+          const dist = Math.hypot(mdx, mdy);
+          if (dist > 30) {
+            hasActiveSteer = true;
+            dx = mdx / dist;
+            dy = mdy / dist;
+            headingRef.current = { dx, dy };
+          }
         }
       }
 
-      // 4. Continuous auto-glide navigation
+      // 4. Continuous auto-glide navigation: keep moving in heading direction
       if (!hasActiveSteer && (headingRef.current.dx !== 0 || headingRef.current.dy !== 0)) {
         dx = headingRef.current.dx;
         dy = headingRef.current.dy;
@@ -163,13 +148,14 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       const isMoving = Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01;
       const shouldResend = isMoving && (now - lastMoveRef.current.lastSent > 120);
 
+      // Send movement heading to server
       if (moved || shouldResend) {
         lastMoveRef.current = { dx, dy, lastSent: now };
         onMove?.(dx, dy);
       }
 
-      // Render frame with camera
-      render(ctx, canvas, state);
+      // Render frame
+      render(ctx, canvas);
       frameRef.current = requestAnimationFrame(loop);
     };
 
@@ -177,233 +163,171 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
-  }, [onMove, joystickRef]);
+  }, [onMove, playerSocketId, joystickRef]);
 
-  // ── Camera-based Renderer ─────────────────────────────────
+  // ── Rendering ─────────────────────────────────────────────
 
-  function render(ctx, canvas, state) {
-    const { players = [], particles = [], mySocketId, mapTheme, safeZone, slashes = [] } = state;
+  function render(ctx, canvas) {
+    const { players, particles, mySocketId, mapTheme } = getState();
     const W = canvas.width;
     const H = canvas.height;
-    const MW = mapWidth || 3000;
-    const MH = mapHeight || 3000;
-    const dpr = W / (canvas.clientWidth || W);
 
-    // Find my player for camera centering
-    const me = players.find(p => p.socketId === mySocketId);
-
-    // Camera: center on player, clamp to map edges
-    let camX = 0, camY = 0;
-    if (me) {
-      camX = me.x - W / (2 * dpr);
-      camY = me.y - H / (2 * dpr);
-    }
-    // Smooth camera
-    cameraRef.current.x += (camX - cameraRef.current.x) * 0.12;
-    cameraRef.current.y += (camY - cameraRef.current.y) * 0.12;
-    camX = cameraRef.current.x;
-    camY = cameraRef.current.y;
-
-    // === Begin drawing ===
-    ctx.save();
-    ctx.scale(dpr, dpr);
-
-    const viewW = W / dpr;
-    const viewH = H / dpr;
-
-    // 1. Background (fill entire viewport)
+    // Background
     ctx.fillStyle = mapTheme?.background || '#0d1520';
-    ctx.fillRect(0, 0, viewW, viewH);
+    ctx.fillRect(0, 0, W, H);
 
-    // Translate to camera
-    ctx.save();
-    ctx.translate(-camX, -camY);
-
-    // 2. Grid pattern (only draw visible portion)
-    const gridSpacing = 60;
-    const startGX = Math.floor(Math.max(0, camX) / gridSpacing) * gridSpacing;
-    const endGX = Math.min(MW, camX + viewW + gridSpacing);
-    const startGY = Math.floor(Math.max(0, camY) / gridSpacing) * gridSpacing;
-    const endGY = Math.min(MH, camY + viewH + gridSpacing);
-
+    // Grid pattern
     ctx.strokeStyle = mapTheme?.gridColor || 'rgba(108,99,255,0.06)';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = startGX; x <= endGX; x += gridSpacing) {
-      ctx.moveTo(x, startGY);
-      ctx.lineTo(x, endGY);
+    for (let x = 0; x < W; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
     }
-    for (let y = startGY; y <= endGY; y += gridSpacing) {
-      ctx.moveTo(startGX, y);
-      ctx.lineTo(endGX, y);
+    for (let y = 0; y < H; y += 40) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
     }
-    ctx.stroke();
 
-    // 3. Map border glow
-    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(108,99,255,0.5)';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(0, 0, MW, MH);
+    // Map border glow
+    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(108,99,255,0.4)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, W - 2, H - 2);
 
-    // 4. Safe zone
+    // Draw obstacles (cover/walls)
+    if (mapTheme?.obstacles) {
+      ctx.fillStyle = mapTheme.obstacleColor || 'rgba(100, 100, 100, 0.5)';
+      ctx.strokeStyle = mapTheme.obstacleBorder || 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 2;
+      for (const obs of mapTheme.obstacles) {
+        ctx.beginPath();
+        ctx.rect(obs.x, obs.y, obs.w, obs.h);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Diagonal hatch pattern for cover illusion
+        ctx.save();
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 1;
+        for (let i = -obs.h; i < obs.w + obs.h; i += 15) {
+          ctx.beginPath();
+          ctx.moveTo(obs.x + i, obs.y);
+          ctx.lineTo(obs.x + i - obs.h, obs.y + obs.h);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    // Draw bushes
+    if (mapTheme?.bushes) {
+      ctx.fillStyle = mapTheme.bushColor || 'rgba(100, 255, 100, 0.4)';
+      ctx.strokeStyle = mapTheme.bushBorder || 'rgba(50, 200, 50, 0.6)';
+      ctx.lineWidth = 2;
+      for (const bush of mapTheme.bushes) {
+        ctx.beginPath();
+        ctx.rect(bush.x, bush.y, bush.w, bush.h);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Add some leaf-like details
+        ctx.save();
+        ctx.clip();
+        ctx.fillStyle = mapTheme.bushBorder || 'rgba(50, 200, 50, 0.6)';
+        for (let i = 0; i < bush.w; i += 30) {
+          for (let j = 0; j < bush.h; j += 30) {
+            ctx.beginPath();
+            ctx.arc(bush.x + i + 15, bush.y + j + 15, 8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    // Draw safe zone
+    const safeZone = getState().safeZone;
     if (safeZone) {
+      // Draw outer poison area
       ctx.save();
       ctx.beginPath();
-      ctx.rect(0, 0, MW, MH);
-      ctx.arc(safeZone.x, safeZone.y, Math.max(0, safeZone.radius), 0, Math.PI * 2, true);
-      ctx.fillStyle = 'rgba(120, 20, 200, 0.35)';
+      ctx.rect(0, 0, W, H); // Full screen
+      ctx.arc(safeZone.x, safeZone.y, safeZone.radius, 0, Math.PI * 2, true); // Hole
+      ctx.fillStyle = 'rgba(80, 0, 150, 0.4)'; // Darker purple poison
       ctx.fill();
-
+      
+      // Draw safe zone border
       ctx.beginPath();
-      ctx.arc(safeZone.x, safeZone.y, Math.max(0, safeZone.radius), 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 0, 255, 0.3)';
-      ctx.lineWidth = 8;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(safeZone.x, safeZone.y, Math.max(0, safeZone.radius), 0, Math.PI * 2);
-      ctx.strokeStyle = '#FF00FF';
-      ctx.lineWidth = 3;
+      ctx.arc(safeZone.x, safeZone.y, safeZone.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ff00ff';
+      ctx.lineWidth = 4;
+      ctx.shadowColor = '#ff00ff';
+      ctx.shadowBlur = 15;
       ctx.stroke();
       ctx.restore();
     }
 
-    // 5. Particles (Only draw visible ones)
-    if (particles.length > 0) {
-      const t = Date.now() / 700;
-      const defaultColor = mapTheme?.particleColor || '#FFD700';
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        // Frustum cull: skip if outside viewport
-        if (p.x < camX - 20 || p.x > camX + viewW + 20 || p.y < camY - 20 || p.y > camY + viewH + 20) continue;
+    // Draw particles (collectible dots)
+    for (const p of particles) {
+      const t = Date.now() / 600;
+      const pulse = 1 + 0.2 * Math.sin(t + p.x);
 
-        const pulse = 1 + 0.15 * Math.sin(t + p.x * 0.1);
-        const r = PARTICLE_RADIUS * pulse;
-        const color = p.color || defaultColor;
+      const color = mapTheme?.particleColor || p.color || '#FFD700';
 
-        ctx.fillStyle = 'rgba(255, 215, 0, 0.2)';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r + 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    // 6. Players (All — they could be anywhere on map)
-    for (let i = 0; i < players.length; i++) {
-      const pl = players[i];
-      // Only draw if roughly within viewport (generous margin for large players)
-      const pRad = (pl.radius || PLAYER_RADIUS) + 60;
-      if (pl.x < camX - pRad || pl.x > camX + viewW + pRad || pl.y < camY - pRad || pl.y > camY + viewH + pRad) continue;
-      drawPlayer(ctx, pl, pl.socketId === mySocketId, slashes);
-    }
-
-    // 7. Slashes
-    if (slashes.length > 0) {
-      const now = Date.now();
-      for (let i = 0; i < slashes.length; i++) {
-        const slash = slashes[i];
-        const age = now - slash.createdAt;
-        if (age <= 220) {
-          if (slash.x >= camX - 80 && slash.x <= camX + viewW + 80 && slash.y >= camY - 80 && slash.y <= camY + viewH + 80) {
-            drawSlash(ctx, slash, age);
-          }
-        }
-      }
-    }
-
-    ctx.restore(); // End camera translate
-
-    // 8. Minimap (bottom-right corner overlay)
-    drawMinimap(ctx, viewW, viewH, MW, MH, players, me, safeZone);
-
-    ctx.restore(); // End dpr scale
-  }
-
-  // ── Minimap ────────────────────────────────────────────────
-
-  function drawMinimap(ctx, viewW, viewH, mapW, mapH, players, me, safeZone) {
-    const size = Math.min(140, viewW * 0.2);
-    const padding = 12;
-    const mx = viewW - size - padding;
-    const my = viewH - size - padding;
-    const scaleX = size / mapW;
-    const scaleY = size / mapH;
-
-    // Background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-    ctx.fillRect(mx, my, size, size);
-
-    // Border
-    ctx.strokeStyle = 'rgba(108, 99, 255, 0.6)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(mx, my, size, size);
-
-    // Safe zone circle
-    if (safeZone) {
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(mx + safeZone.x * scaleX, my + safeZone.y * scaleY, safeZone.radius * scaleX, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-
-    // Players as dots
-    for (let i = 0; i < players.length; i++) {
-      const p = players[i];
-      if (!p.alive && !p.respawning) continue;
-      const isMe = me && p.socketId === me.socketId;
-      ctx.fillStyle = isMe ? '#FFFFFF' : (p.color || '#FF4757');
-      ctx.beginPath();
-      ctx.arc(mx + p.x * scaleX, my + p.y * scaleY, isMe ? 3 : 2, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, PARTICLE_RADIUS * pulse, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
 
-    // Viewport rectangle
-    if (me) {
-      const cx = cameraRef.current.x;
-      const cy = cameraRef.current.y;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(mx + cx * scaleX, my + cy * scaleY, viewW * scaleX, viewH * scaleY);
+    // Draw players
+    for (const player of players) {
+      drawPlayer(ctx, player, player.socketId === mySocketId);
+    }
+
+    // Draw slashes
+    for (const slash of getState().slashes) {
+      drawSlash(ctx, slash);
     }
   }
 
-  function drawSlash(ctx, slash, age) {
-    const progress = age / 220;
-    const angle = Math.atan2(slash.facingY || 0, slash.facingX || 1);
-    const attackerRadius = slash.radius || 16;
-    const radius = attackerRadius * 1.4 + progress * attackerRadius;
-    const alpha = Math.max(0, 1 - progress);
+  function drawSlash(ctx, slash) {
+    const age = Date.now() - slash.createdAt;
+    if (age > 200) return;
 
+    const progress = age / 200; // 0 to 1
+    const angle = Math.atan2(slash.facingY || 0, slash.facingX || 1);
+    
     ctx.save();
     ctx.translate(slash.x, slash.y);
     ctx.rotate(angle);
-
+    
+    // Scale visual slash based on attacker's radius (fallback to 16)
+    const attackerRadius = slash.radius || 16;
+    const baseVisualRadius = attackerRadius * 1.5; 
+    const radius = baseVisualRadius + progress * attackerRadius;
+    
     ctx.beginPath();
-    ctx.arc(0, 0, radius, -Math.PI / 2.2, Math.PI / 2.2, false);
-    ctx.lineWidth = 8 * alpha;
-    ctx.strokeStyle = `rgba(255, 100, 100, ${alpha * 0.4})`;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, -Math.PI / 2.2, Math.PI / 2.2, false);
-    ctx.lineWidth = 3 * alpha;
-    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.arc(0, 0, radius, -Math.PI/2, Math.PI/2, false);
+    
+    ctx.lineWidth = 5 * (1 - progress);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${1 - progress})`;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#fff';
     ctx.stroke();
 
     ctx.restore();
   }
 
-  function drawPlayer(ctx, player, isMe, slashes) {
+  function drawPlayer(ctx, player, isMe) {
     const radius = player.radius || PLAYER_RADIUS;
 
     if (!player.alive || player.respawning) {
+      // Draw ghost/dead/respawning indicator
       ctx.save();
-      ctx.globalAlpha = 0.35;
+      ctx.globalAlpha = 0.3;
       ctx.fillStyle = player.color || '#888';
       ctx.beginPath();
       ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
@@ -413,19 +337,18 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     }
 
     ctx.save();
-    if (player.inBushId !== null && player.inBushId !== undefined) {
-      ctx.globalAlpha = 0.5;
+    
+    // If player is in bush, make them transparent
+    if (player.inBushId !== null) {
+      ctx.globalAlpha = 0.6;
     }
 
-    // Outer self aura
+    // Glow for current player
     if (isMe) {
-      ctx.fillStyle = 'rgba(108, 99, 255, 0.25)';
-      ctx.beginPath();
-      ctx.arc(player.x, player.y, radius + 7, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.shadowColor = player.color || '#4A90D9';
+      ctx.shadowBlur = 20;
     }
 
-    // Avatar Image or Vector Circle
     const avatarImg = getImage(player.avatarUrl);
     if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
       ctx.save();
@@ -435,23 +358,26 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       ctx.drawImage(avatarImg, player.x - radius, player.y - radius, radius * 2, radius * 2);
       ctx.restore();
 
-      ctx.strokeStyle = isMe ? '#FFFFFF' : 'rgba(255,255,255,0.5)';
+      ctx.strokeStyle = isMe ? '#fff' : 'rgba(255,255,255,0.4)';
       ctx.lineWidth = isMe ? 2.5 : 1.5;
       ctx.beginPath();
       ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
       ctx.stroke();
     } else {
+      // Fallback Player body
       ctx.fillStyle = player.color || '#4A90D9';
       ctx.beginPath();
       ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      // Inner circle (pupil / design)
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.beginPath();
       ctx.arc(player.x - radius * 0.25, player.y - radius * 0.25, radius * 0.4, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.strokeStyle = isMe ? '#FFFFFF' : 'rgba(255,255,255,0.5)';
+      // Outline
+      ctx.strokeStyle = isMe ? '#fff' : 'rgba(255,255,255,0.4)';
       ctx.lineWidth = isMe ? 2.5 : 1.5;
       ctx.beginPath();
       ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
@@ -459,63 +385,94 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     }
     ctx.restore();
 
-    // Weapon
+    // Draw Weapon with swing animation
     const weaponImg = getImage(player.weaponUrl);
     if (weaponImg && weaponImg.complete && weaponImg.naturalWidth > 0) {
-      const recentSlash = slashes?.find(s => s.attackerSocketId === player.socketId);
+      // Calculate swing animation based on recent slash
+      const recentSlash = getState().slashes.find(s => s.attackerSocketId === player.socketId);
       let swingAngle = 0;
       if (recentSlash) {
         const age = Date.now() - recentSlash.createdAt;
-        if (age < 220) {
-          swingAngle = ((age / 220) * Math.PI) - (Math.PI / 2);
+        if (age < 200) {
+          const progress = age / 200; // 0 to 1
+          // Swing from -60 degrees to +60 degrees
+          swingAngle = (progress * Math.PI) - (Math.PI / 2);
         }
       }
 
       const angle = Math.atan2(player.facingY || 0, player.facingX || 1) + swingAngle;
+      
       ctx.save();
       ctx.translate(player.x, player.y);
       ctx.rotate(angle);
+      
+      // Weapon scales with player radius
       const weaponSize = radius * 1.5;
       ctx.drawImage(weaponImg, radius - 4, -weaponSize / 2, weaponSize, weaponSize);
       ctx.restore();
     }
 
-    // HP Bar
-    const hpRatio = Math.max(0, Math.min(1, player.hp / player.maxHp));
+    // HP bar
+    const hpRatio = player.hp / player.maxHp;
     const barX = player.x - HP_BAR_W / 2;
     const barY = player.y - radius - 12;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(barX, barY, HP_BAR_W, HP_BAR_H);
-    ctx.fillStyle = hpRatio > 0.5 ? '#2ED573' : hpRatio > 0.25 ? '#FFA502' : '#FF4757';
-    ctx.fillRect(barX, barY, HP_BAR_W * hpRatio, HP_BAR_H);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    roundRect(ctx, barX, barY, HP_BAR_W, HP_BAR_H, 3);
+    ctx.fill();
 
-    // Nickname & Score
-    ctx.font = `bold 11px sans-serif`;
+    ctx.fillStyle = hpRatio > 0.5 ? '#2ED573' : hpRatio > 0.25 ? '#FFA502' : '#FF4757';
+    roundRect(ctx, barX, barY, HP_BAR_W * hpRatio, HP_BAR_H, 3);
+    ctx.fill();
+
+    // Nickname
+    ctx.save();
+    ctx.font = `bold 11px 'Outfit', sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillStyle = isMe ? '#FFFFFF' : '#DDDDDD';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = isMe ? '#fff' : 'rgba(255,255,255,0.85)';
     ctx.fillText(
       (player.nickname?.length > 10 ? player.nickname.slice(0, 10) + '…' : player.nickname) || '?',
       player.x,
       player.y - radius - 16
     );
-
-    ctx.font = `bold 10px monospace`;
+    // Score badge
+    ctx.font = `11px 'JetBrains Mono', monospace`;
     ctx.fillStyle = '#FFD700';
-    ctx.fillText(`${player.score || 0}`, player.x, player.y + radius + 14);
+    ctx.fillText(`${player.score}`, player.x, player.y + radius + 15);
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   }
 
   return (
     <canvas
       ref={canvasRef}
+      width={mapWidth || 1200}
+      height={mapHeight || 800}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onMouseDown={handleCanvasClick}
       style={{
         display: 'block',
-        width: '100%',
-        height: '100%',
+        borderRadius: 8,
         cursor: 'crosshair',
+        maxWidth: '100%',
+        maxHeight: '100%',
+        objectFit: 'contain',
         touchAction: 'none',
       }}
       tabIndex={0}
