@@ -77,7 +77,11 @@ const config = {
   SERVICE_BUS_CONNECTION_STRING: process.env.SERVICE_BUS_CONNECTION_STRING || null,
 
   // Azure Web PubSub
-  WEB_PUBSUB_CONNECTION_STRING: process.env.WEB_PUBSUB_CONNECTION_STRING || null,
+  WEB_PUBSUB_CONNECTION_STRING: process.env.WEB_PUBSUB_CONNECTION_STRING || '',
+  PUBSUB_HUB: process.env.PUBSUB_HUB || 'arenablast_hub',
+
+  CONTENT_SAFETY_ENDPOINT: process.env.CONTENT_SAFETY_ENDPOINT || '',
+  CONTENT_SAFETY_KEY: process.env.CONTENT_SAFETY_KEY || '',
 };
 
 config.loadKeyVaultSecrets = async () => {
@@ -134,8 +138,20 @@ config.loadKeyVaultSecrets = async () => {
       config.WEB_PUBSUB_CONNECTION_STRING = pubsubSecret.value;
       console.log('[KeyVault] Successfully loaded WEB-PUBSUB-CONNECTION-STRING');
     }
+    const csEndpointSecret = await client.getSecret('CONTENT-SAFETY-ENDPOINT').catch(() => null);
+    if (csEndpointSecret && csEndpointSecret.value) {
+      config.CONTENT_SAFETY_ENDPOINT = csEndpointSecret.value;
+      console.log('[KeyVault] Successfully loaded CONTENT-SAFETY-ENDPOINT');
+    }
+
+    const csKeySecret = await client.getSecret('CONTENT-SAFETY-KEY').catch(() => null);
+    if (csKeySecret && csKeySecret.value) {
+      config.CONTENT_SAFETY_KEY = csKeySecret.value;
+      console.log('[KeyVault] Successfully loaded CONTENT-SAFETY-KEY');
+    }
+    
   } catch (err) {
-    console.error('[KeyVault] Error loading secrets:', err.message);
+    console.error('[KeyVault] Failed to load secrets from Key Vault:', err.message);
   }
 };
 

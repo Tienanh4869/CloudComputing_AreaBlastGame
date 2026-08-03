@@ -320,13 +320,16 @@ const initSocket = (io) => {
     });
 
     // ── global_chat_message: World chat ──────────────────────────
-    socket.on('global_chat_message', (msg) => {
+    socket.on('global_chat_message', async (msg) => {
       if (!msg || typeof msg !== 'string' || msg.trim().length === 0) return;
+
+      const { moderateText } = require('../services/contentSafetyService');
+      const { isSafe, censoredText } = await moderateText(msg.trim().substring(0, 150));
 
       io.emit('global_chat_message', {
         socketId: socket.id,
         nickname: socket.nickname,
-        message: msg.trim().substring(0, 150),
+        message: censoredText,
         timestamp: Date.now(),
       });
     });
