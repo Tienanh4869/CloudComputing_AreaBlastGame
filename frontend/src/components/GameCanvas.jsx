@@ -24,6 +24,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
   const canvasRef = useRef(null);
   const keysRef = useRef(new Set());
   const frameRef = useRef(null);
+  const renderPlayersRef = useRef(new Map());
 
   // Subscribe to game state directly for rendering without triggering React re-renders
   const getState = () => useGameStore.getState();
@@ -183,14 +184,49 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
 
   function render(ctx, canvas, state) {
     const { players = [], particles = [], mySocketId, mapTheme, safeZone, slashes = [] } = state;
+    
+    // --- LERP PLAYERS TO PREVENT JITTER ---
+    const renderPlayers = renderPlayersRef.current;
+    const currentIds = new Set(players.map(p => p.socketId));
+    for (const id of renderPlayers.keys()) {
+      if (!currentIds.has(id)) renderPlayers.delete(id);
+    }
+    
+    const lerpedPlayers = [];
+    let me = null;
+    
+    for (let i = 0; i < players.length; i++) {
+      const pl = players[i];
+      let rPlayer = renderPlayers.get(pl.socketId);
+      if (!rPlayer) {
+        rPlayer = { x: pl.x, y: pl.y };
+        renderPlayers.set(pl.socketId, rPlayer);
+      } else {
+        // If distance is huge (e.g., respawn or map teleport), snap instantly
+        const distSq = (pl.x - rPlayer.x)**2 + (pl.y - rPlayer.y)**2;
+        if (distSq > 150000) { 
+           rPlayer.x = pl.x;
+           rPlayer.y = pl.y;
+        } else {
+           rPlayer.x += (pl.x - rPlayer.x) * 0.25; // 25% smooth lerp per frame
+           rPlayer.y += (pl.y - rPlayer.y) * 0.25;
+        }
+      }
+      
+      const lerpedPl = { ...pl, x: rPlayer.x, y: rPlayer.y };
+      lerpedPlayers.push(lerpedPl);
+      
+      if (lerpedPl.socketId === mySocketId) {
+        me = lerpedPl;
+      }
+    }
+    // ---------------------------------------
+
     const W = canvas.width;
     const H = canvas.height;
     const MW = mapWidth || 3000;
     const MH = mapHeight || 3000;
     const dpr = W / (canvas.clientWidth || W);
-
-    // Find my player for camera centering
-    const me = players.find(p => p.socketId === mySocketId);
 
     // Camera: center on player
     let targetCamX = 0, targetCamY = 0;
@@ -290,8 +326,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     }
 
     // 6. Players (All — they could be anywhere on map)
-    for (let i = 0; i < players.length; i++) {
-      const pl = players[i];
+    for (let i = 0; i < lerpedPlayers.length; i++) {
+      const pl = lerpedPlayers[i];
       // Only draw if roughly within viewport (generous margin for large players)
       const pRad = (pl.radius || PLAYER_RADIUS) + 60;
       if (pl.x < camX - pRad || pl.x > camX + viewW + pRad || pl.y < camY - pRad || pl.y > camY + viewH + pRad) continue;
@@ -315,7 +351,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     ctx.restore(); // End camera translate
 
     // 8. Minimap (bottom-right corner overlay)
-    drawMinimap(ctx, viewW, viewH, MW, MH, players, me, safeZone);
+    drawMinimap(ctx, viewW, viewH, MW, MH, lerpedPlayers, me, safeZone);
 
     ctx.restore(); // End dpr scale
   }
