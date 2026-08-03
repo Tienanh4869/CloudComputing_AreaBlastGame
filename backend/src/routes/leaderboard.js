@@ -48,41 +48,103 @@ router.get('/', async (req, res, next) => {
   let ranked;
 
   if (period === 'all_time') {
-    const players = await Player.findAll({
-      attributes: [
-        'id',
-        'nickname',
-        'avatar_color',
-        'total_score',
-        'kills',
-        'wins',
-      ],
-      include: [{
-        model: User,
-        as: 'user',
-        attributes: ['username'],
-      }],
-      order: [
-        ['total_score', 'DESC'],
-        ['kills', 'DESC'],
-        ['nickname', 'ASC'],
-      ],
-      limit: safeLimit,
-    });
+    const rows = await sequelize.query(
+      `
+        WITH match_activity AS (
+          SELECT
+            mp.player_id,
+            SUM(COALESCE(mp.score, 0)) AS score,
+            SUM(COALESCE(mp.kills, 0)) AS kills,
+            COUNT(*) FILTER (WHERE mp.rank = 1) AS wins
+          FROM match_players AS mp
+          INNER JOIN matches AS m
+            ON m.id = mp.match_id
+          WHERE m.status = 'finished'
+          GROUP BY mp.player_id
+        ),
 
-    ranked = players.map((player, index) => ({
-      id: player.id,
+        quest_activity AS (
+          SELECT
+            q.player_id,
+            SUM(
+              CASE q.quest_code
+                WHEN 'DAILY_LOGIN' THEN :loginReward
+                WHEN 'DAILY_KILL_5' THEN :killReward
+                WHEN 'DAILY_PLAY_30_MIN' THEN :playReward
+                ELSE 0
+              END
+            ) AS score,
+            0 AS kills,
+            0 AS wins
+          FROM daily_quest_progress AS q
+          WHERE q.completed = TRUE
+          GROUP BY q.player_id
+        ),
+
+        activity AS (
+          SELECT * FROM match_activity
+          UNION ALL
+          SELECT * FROM quest_activity
+        ),
+
+        totals AS (
+          SELECT
+            player_id,
+            SUM(score) AS score,
+            SUM(kills) AS kills,
+            SUM(wins) AS wins
+          FROM activity
+          GROUP BY player_id
+        )
+
+        SELECT
+          p.id AS player_id,
+          p.nickname,
+          p.avatar_color,
+          u.username,
+          GREATEST(COALESCE(totals.score, 0), COALESCE(p.total_score, 0)) AS score,
+          GREATEST(COALESCE(totals.kills, 0), COALESCE(p.kills, 0)) AS kills,
+          GREATEST(COALESCE(totals.wins, 0), COALESCE(p.wins, 0)) AS wins
+
+        FROM players AS p
+        INNER JOIN users AS u
+          ON u.id = p.user_id
+        LEFT JOIN totals
+          ON totals.player_id = p.id
+
+        ORDER BY
+          score DESC,
+          kills DESC,
+          p.nickname ASC
+
+        LIMIT :limit
+      `,
+      {
+        replacements: {
+          limit: safeLimit,
+          loginReward: QUEST_REWARDS.DAILY_LOGIN || 0,
+          killReward: QUEST_REWARDS.DAILY_KILL_5 || 0,
+          playReward: QUEST_REWARDS.DAILY_PLAY_30_MIN || 0,
+        },
+        type: QueryTypes.SELECT,
+      }
+    );
+
+    ranked = rows.map((row, index) => ({
+      id: row.player_id,
       period,
-      score: player.total_score,
-      kills: player.kills,
-      wins: player.wins,
+      score: Number(row.score) || 0,
+      kills: Number(row.kills) || 0,
+      wins: Number(row.wins) || 0,
       rank: index + 1,
       player: {
-        nickname: player.nickname,
-        avatar_color: player.avatar_color,
-        kills: player.kills,
-        wins: player.wins,
-        user: player.user,
+        nickname: row.nickname,
+        avatar_color: row.avatar_color,
+        kills: Number(row.kills) || 0,
+        wins: Number(row.wins) || 0,
+        user: {
+          username: row.username,
+        },
       },
     }));
   } else {
