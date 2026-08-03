@@ -1,6 +1,7 @@
 // src/socket/index.js — Socket.IO server setup and connection handler
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET, SERVICE_BUS_CONNECTION_STRING, GAME } = require('../config/env');
+const env = require('../config/env');
+const { JWT_SECRET, GAME } = env;
 const { User, Player, Room, Match, MatchPlayer, MatchEvent } = require('../models');
 const GameManager = require('../game/GameManager');
 const Matchmaker = require('../game/Matchmaker');
@@ -11,21 +12,43 @@ const { v4: uuidv4 } = require('uuid');
 const { publishGameEvent } = require('../config/serviceBus');
 
 // Init Service Bus Client (if configured)
-let sbSender = null;
-if (SERVICE_BUS_CONNECTION_STRING) {
-  try {
-    const sbClient = new ServiceBusClient(SERVICE_BUS_CONNECTION_STRING);
-    sbSender = sbClient.createSender('match-results');
-  } catch (err) {
-    logger.error('Failed to init ServiceBusClient:', err.message);
-  }
-}
+// let sbSender = null;
+// if (SERVICE_BUS_CONNECTION_STRING) {
+//   try {
+//     const sbClient = new ServiceBusClient(SERVICE_BUS_CONNECTION_STRING);
+//     sbSender = sbClient.createSender('match-results');
+//   } catch (err) {
+//     logger.error('Failed to init ServiceBusClient:', err.message);
+//   }
+// }
 
+// Service Bus sender được khởi tạo sau khi Key Vault đã tải secret.
+let sbSender = null;
 /**
  * Initialize Socket.IO event handlers.
  * Attaches to an existing Socket.IO server instance.
  */
 const initSocket = (io) => {
+  // Khởi tạo sau khi bootstrap đã tải secret từ Azure Key Vault.
+  if (!sbSender && env.SERVICE_BUS_CONNECTION_STRING) {
+    try {
+      const sbClient = new ServiceBusClient(
+        env.SERVICE_BUS_CONNECTION_STRING
+      );
+
+      sbSender = sbClient.createSender('match-results');
+
+      logger.info(
+        '[ServiceBus] Sender match-results initialized'
+      );
+    } catch (err) {
+      logger.error(
+        '[ServiceBus] Failed to initialize match-results sender:',
+        err.message
+      );
+    }
+  }
+
   // Initialize Matchmaker with io instance
   Matchmaker.init(io);
 
