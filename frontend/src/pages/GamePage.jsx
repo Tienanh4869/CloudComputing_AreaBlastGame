@@ -11,12 +11,26 @@ export default function GamePage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { player } = useAuthStore();
-  const {
-    matchStatus, matchCountdown, myHp, myMaxHp, myScore, myKills, myAlive,
-    myRespawning, myRespawnTimer, startTime, matchDuration,
-    mapWidth, mapHeight, mapUrl, matchLeaderboard, killFeed, matchResults,
-    players, currentRoom, isHost,
-  } = useGameStore();
+  const matchStatus = useGameStore((s) => s.matchStatus);
+  const matchCountdown = useGameStore((s) => s.matchCountdown);
+  const myHp = useGameStore((s) => s.myHp);
+  const myMaxHp = useGameStore((s) => s.myMaxHp);
+  const myScore = useGameStore((s) => s.myScore);
+  const myKills = useGameStore((s) => s.myKills);
+  const myAlive = useGameStore((s) => s.myAlive);
+  const myRespawning = useGameStore((s) => s.myRespawning);
+  const myRespawnTimer = useGameStore((s) => s.myRespawnTimer);
+  const startTime = useGameStore((s) => s.startTime);
+  const matchDuration = useGameStore((s) => s.matchDuration);
+  const mapWidth = useGameStore((s) => s.mapWidth);
+  const mapHeight = useGameStore((s) => s.mapHeight);
+  const mapUrl = useGameStore((s) => s.mapUrl);
+  const matchLeaderboard = useGameStore((s) => s.matchLeaderboard);
+  const killFeed = useGameStore((s) => s.killFeed);
+  const matchResults = useGameStore((s) => s.matchResults);
+  const players = useGameStore((s) => s.players);
+  const currentRoom = useGameStore((s) => s.currentRoom);
+  const isHost = useGameStore((s) => s.isHost);
 
   const { joinRoom, leaveRoom, sendReady, sendMove, sendAttack } = useSocket();
   const hasJoined = useRef(false);
