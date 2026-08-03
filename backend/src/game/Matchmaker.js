@@ -5,7 +5,7 @@ const { generateRoomCode } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
 const QUEUE_KEY = 'qm_queue';
-const PLAYERS_NEEDED = 4;
+const PLAYERS_NEEDED = 8;
 const TICK_RATE = 2000;
 let ioInstance = null;
 let intervalId = null;
@@ -15,7 +15,29 @@ class Matchmaker {
     ioInstance = io;
     if (intervalId) clearInterval(intervalId);
     intervalId = setInterval(Matchmaker.tick, TICK_RATE);
-    logger.info('[Matchmaker] Initialized');
+    logger.info('[Matchmaker] Initialized (8 Players Matchmaking)');
+  }
+
+  static async broadcastQueueUpdate() {
+    const redis = getRedis();
+    if (!redis || !ioInstance) return;
+    try {
+      const items = await redis.lRange(QUEUE_KEY, 0, -1);
+      const count = items.length;
+      for (const item of items) {
+        try {
+          const p = JSON.parse(item);
+          if (p.socketId) {
+            ioInstance.to(p.socketId).emit('quick_match_queue_update', {
+              current: count,
+              needed: PLAYERS_NEEDED,
+            });
+          }
+        } catch (err) {}
+      }
+    } catch (err) {
+      logger.error('[Matchmaker] Error broadcasting queue update', err);
+    }
   }
 
   static async join(playerData) {
@@ -27,6 +49,8 @@ class Matchmaker {
     
     await redis.rPush(QUEUE_KEY, JSON.stringify(playerData));
     logger.info(`[Matchmaker] Player joined queue: ${playerData.nickname}`);
+    
+    await Matchmaker.broadcastQueueUpdate();
   }
 
   static async leave(playerData) {
@@ -36,6 +60,8 @@ class Matchmaker {
     // Remove by stringified value
     await redis.lRem(QUEUE_KEY, 0, JSON.stringify(playerData));
     logger.info(`[Matchmaker] Player left queue: ${playerData.nickname}`);
+
+    await Matchmaker.broadcastQueueUpdate();
   }
 
   static async leaveBySocket(socketId) {
@@ -44,14 +70,20 @@ class Matchmaker {
     
     // We need to find the item to remove it
     const items = await redis.lRange(QUEUE_KEY, 0, -1);
+    let removed = false;
     for (const item of items) {
       try {
         const p = JSON.parse(item);
         if (p.socketId === socketId) {
           await redis.lRem(QUEUE_KEY, 0, item);
           logger.info(`[Matchmaker] Removed socket ${socketId} from queue`);
+          removed = true;
         }
       } catch (err) {}
+    }
+
+    if (removed) {
+      await Matchmaker.broadcastQueueUpdate();
     }
   }
 
@@ -61,6 +93,11 @@ class Matchmaker {
 
     try {
       const len = await redis.lLen(QUEUE_KEY);
+      // Periodically keep queue counts in sync for any active waiting users
+      if (len > 0) {
+        await Matchmaker.broadcastQueueUpdate();
+      }
+
       if (len >= PLAYERS_NEEDED) {
         // Pop players
         const players = [];
@@ -71,6 +108,7 @@ class Matchmaker {
 
         if (players.length === PLAYERS_NEEDED) {
            await Matchmaker.createMatch(players);
+           await Matchmaker.broadcastQueueUpdate();
         } else {
            // Rollback if something strange happened
            for (const p of players) {
@@ -95,7 +133,7 @@ class Matchmaker {
         status: 'waiting',
       });
 
-      logger.info(`[Matchmaker] Quick match created: ${code}`);
+      logger.info(`[Matchmaker] Quick match created for 8 players: ${code}`);
 
       // Notify the players
       for (const p of players) {
