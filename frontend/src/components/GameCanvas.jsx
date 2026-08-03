@@ -65,6 +65,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
   }, [handleKeyDown, handleKeyUp]);
 
   // ── Game Loop (client-side: read input, render) ────────────
+  const lastMoveRef = useRef({ dx: 0, dy: 0, lastSent: 0 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -81,15 +82,33 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
       if (keys.has('KeyA') || keys.has('ArrowLeft'))  dx -= 1;
       if (keys.has('KeyD') || keys.has('ArrowRight')) dx += 1;
 
-      // Merge with Joystick input
+      // Merge with Joystick input (analog dx, dy from mobile/touch)
       if (joystickRef && joystickRef.current) {
-        if (joystickRef.current.dx !== 0 || joystickRef.current.dy !== 0) {
+        if (Math.abs(joystickRef.current.dx) > 0.05 || Math.abs(joystickRef.current.dy) > 0.05) {
           dx = joystickRef.current.dx;
           dy = joystickRef.current.dy;
         }
       }
 
-      if (dx !== 0 || dy !== 0) onMove?.(dx, dy);
+      // Normalize diagonal movement from keyboard
+      if (keys.size > 0 && (dx !== 0 || dy !== 0) && (!joystickRef?.current?.dx && !joystickRef?.current?.dy)) {
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          dx /= len;
+          dy /= len;
+        }
+      }
+
+      const now = performance.now();
+      const moved = Math.abs(dx - lastMoveRef.current.dx) > 0.01 || Math.abs(dy - lastMoveRef.current.dy) > 0.01;
+      const isMoving = Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01;
+      const shouldResend = isMoving && (now - lastMoveRef.current.lastSent > 100);
+
+      // Send when movement direction changes OR when stopping (dx=0, dy=0) OR periodically while moving
+      if (moved || shouldResend) {
+        lastMoveRef.current = { dx, dy, lastSent: now };
+        onMove?.(dx, dy);
+      }
 
       // Render frame
       render(ctx, canvas);
@@ -100,7 +119,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
-  }, [onMove, playerSocketId]);
+  }, [onMove, playerSocketId, joystickRef]);
 
   // ── Rendering ─────────────────────────────────────────────
 
