@@ -10,6 +10,66 @@ const pendingRooms = new Map();
 // Cache fetched maps to avoid hitting Azure Blob Storage repeatedly
 const mapCache = new Map();
 
+// Function to procedurally generate random obstacles and bushes across the map
+function generateProceduralTerrain(width = 1200, height = 800) {
+  const obstacles = [];
+  const bushes = [];
+  const minMargin = 80;
+
+  // 1. Generate 6 - 10 random obstacles
+  const numObstacles = Math.floor(Math.random() * 5) + 6;
+  for (let attempt = 0; attempt < numObstacles * 3 && obstacles.length < numObstacles; attempt++) {
+    const shapeType = Math.floor(Math.random() * 3);
+    let w, h;
+    if (shapeType === 0) {
+      w = Math.floor(Math.random() * 40) + 70;
+      h = Math.floor(Math.random() * 40) + 70;
+    } else if (shapeType === 1) {
+      w = Math.floor(Math.random() * 60) + 140;
+      h = Math.floor(Math.random() * 20) + 40;
+    } else {
+      w = Math.floor(Math.random() * 20) + 40;
+      h = Math.floor(Math.random() * 60) + 140;
+    }
+
+    const x = Math.floor(Math.random() * (width - w - minMargin * 2)) + minMargin;
+    const y = Math.floor(Math.random() * (height - h - minMargin * 2)) + minMargin;
+
+    const overlaps = obstacles.some(obs =>
+      x < obs.x + obs.w + 40 &&
+      x + w + 40 > obs.x &&
+      y < obs.y + obs.h + 40 &&
+      y + h + 40 > obs.y
+    );
+
+    if (!overlaps) {
+      obstacles.push({ x, y, w, h });
+    }
+  }
+
+  // 2. Generate 7 - 12 random bushes
+  const numBushes = Math.floor(Math.random() * 6) + 7;
+  for (let attempt = 0; attempt < numBushes * 3 && bushes.length < numBushes; attempt++) {
+    const w = Math.floor(Math.random() * 80) + 120;
+    const h = Math.floor(Math.random() * 60) + 100;
+    const x = Math.floor(Math.random() * (width - w - minMargin * 2)) + minMargin;
+    const y = Math.floor(Math.random() * (height - h - minMargin * 2)) + minMargin;
+
+    const overlapsObs = obstacles.some(obs =>
+      x < obs.x + obs.w &&
+      x + w > obs.x &&
+      y < obs.y + obs.h &&
+      y + h > obs.y
+    );
+
+    if (!overlapsObs) {
+      bushes.push({ x, y, w, h });
+    }
+  }
+
+  return { obstacles, bushes };
+}
+
 const GameManager = {
   /**
    * Create or return existing game room.
@@ -30,6 +90,7 @@ const GameManager = {
     const creationPromise = (async () => {
       const maps = ['ice_map.json', 'fire_map.json'];
       const randomMap = maps[Math.floor(Math.random() * maps.length)];
+      const isIceMap = randomMap === 'ice_map.json';
       
       // Use environment variable if available, else fallback to hardcoded
       const baseUrl = process.env.MAPS_BASE_URL || 'https://arenablaststore13178.blob.core.windows.net/arenablast-maps';
@@ -47,7 +108,7 @@ const GameManager = {
             mapCache.set(mapUrl, data); // Cache it in memory!
             logger.info(`[GameManager] Fetched and cached map ${randomMap} from Azure Blob Storage`);
           } else {
-             throw new Error(`HTTP ${response.status}`);
+            throw new Error(`HTTP ${response.status}`);
           }
         }
         
@@ -56,8 +117,6 @@ const GameManager = {
         }
       } catch (err) {
         logger.warn(`[GameManager] Failed to fetch map JSON from Azure Blob, using fallback`, err.message);
-        // FALLBACK: Tránh việc map không có chướng ngại vật (Gây lỗi tàng hình)
-        const isIceMap = randomMap === 'ice_map.json';
         mapConfig.theme = {
           background: isIceMap ? "#001a33" : "#330000",
           gridColor: isIceMap ? "rgba(0, 150, 255, 0.2)" : "rgba(255, 100, 0, 0.2)",
@@ -65,26 +124,37 @@ const GameManager = {
           particleColor: isIceMap ? "#80d4ff" : "#ff9933",
           obstacleColor: isIceMap ? "rgba(0, 200, 255, 0.4)" : "rgba(255, 100, 0, 0.4)",
           obstacleBorder: isIceMap ? "rgba(0, 255, 255, 0.8)" : "rgba(255, 200, 0, 0.8)",
-          obstacles: [
-            { x: 400, y: 300, w: 200, h: 50 },
-            { x: 800, y: 500, w: 50, h: 200 },
-            { x: 150, y: 150, w: 100, h: 100 },
-            { x: 1050, y: 200, w: 100, h: 100 }
-          ],
           bushColor: isIceMap ? "rgba(100, 255, 100, 0.4)" : "rgba(200, 200, 50, 0.4)",
           bushBorder: isIceMap ? "rgba(50, 200, 50, 0.6)" : "rgba(150, 150, 20, 0.6)",
-          bushes: [
-            { x: 100, y: 700, w: 150, h: 150 },
-            { x: 600, y: 100, w: 250, h: 120 },
-            { x: 1100, y: 600, w: 200, h: 200 }
-          ]
         };
       }
+
+      // Procedurally generate unique random obstacles and bushes for this room
+      const { obstacles, bushes } = generateProceduralTerrain(mapConfig.width, mapConfig.height);
+      if (!mapConfig.theme) {
+        mapConfig.theme = {
+          background: isIceMap ? "#001a33" : "#330000",
+          gridColor: isIceMap ? "rgba(0, 150, 255, 0.2)" : "rgba(255, 100, 0, 0.2)",
+          borderGlow: isIceMap ? "rgba(0, 200, 255, 0.8)" : "rgba(255, 50, 0, 0.8)",
+          particleColor: isIceMap ? "#80d4ff" : "#ff9933",
+          obstacleColor: isIceMap ? "rgba(0, 200, 255, 0.4)" : "rgba(255, 100, 0, 0.4)",
+          obstacleBorder: isIceMap ? "rgba(0, 255, 255, 0.8)" : "rgba(255, 200, 0, 0.8)",
+          bushColor: isIceMap ? "rgba(100, 255, 100, 0.4)" : "rgba(200, 200, 50, 0.4)",
+          bushBorder: isIceMap ? "rgba(50, 200, 50, 0.6)" : "rgba(150, 150, 20, 0.6)",
+        };
+      }
+      mapConfig.theme.obstacles = obstacles;
+      mapConfig.theme.bushes = bushes;
 
       const room = new GameRoom(roomId, roomCode, mapConfig);
       activeRooms.set(roomId, room);
       pendingRooms.delete(roomId);
-      logger.info('[GameManager] Room created', { roomId, map: randomMap });
+      logger.info('[GameManager] Room created with procedural terrain', { 
+        roomId, 
+        map: randomMap,
+        obstacleCount: obstacles.length,
+        bushCount: bushes.length 
+      });
       
       return room;
     })();
