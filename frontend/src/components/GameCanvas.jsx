@@ -1,7 +1,6 @@
-// src/components/GameCanvas.jsx — Canvas 2D game renderer
-import { useEffect, useRef, useCallback, useState } from 'react';
+// src/components/GameCanvas.jsx — High-Performance Canvas 2D Game Renderer (Mobile & Desktop 60FPS)
+import { useEffect, useRef, useCallback } from 'react';
 import useGameStore from '../store/gameStore';
-import useAuthStore from '../store/authStore';
 
 // ── Renderer constants ────────────────────────────────────────
 const PLAYER_RADIUS = 16;
@@ -21,24 +20,12 @@ function getImage(url) {
   return img;
 }
 
-export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapUrl, joystickRef }) {
+export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joystickRef }) {
   const canvasRef = useRef(null);
   const keysRef = useRef(new Set());
   const frameRef = useRef(null);
-  const { roomId, mapTheme, particles, players, matchStatus } = useGameStore(s => ({
-    roomId: s.roomId,
-    mapTheme: s.mapTheme,
-    particles: s.particles,
-    players: s.players,
-    matchStatus: s.matchStatus,
-  }));
-  const playerSocketId = useGameStore((s) => s.mySocketId);
-  const { player: myProfile } = useAuthStore();
 
-  // No longer fetching mapTheme from Blob Storage on frontend.
-  // We use mapTheme received from backend via socket.
-
-  // Subscribe to game state directly for rendering
+  // Subscribe to game state directly for rendering without triggering React re-renders
   const getState = () => useGameStore.getState();
 
   // ── Input Handling & Continuous Steering ───────────────────
@@ -89,14 +76,17 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  // ── Game Loop (client-side: read input, render) ────────────
+  // ── Game Loop (client-side: read input, render 60 FPS) ─────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    // Use alpha: false or desynchronized for highest mobile 2D performance
+    const ctx = canvas.getContext('2d', { alpha: false });
 
     const loop = () => {
+      const state = getState();
+      const myId = state.mySocketId;
       const keys = keysRef.current;
       let dx = 0, dy = 0;
       let hasActiveSteer = false;
@@ -123,7 +113,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
         }
       } else if (mousePosRef.current.active) {
         // 3. Laptop Mouse steering (steer toward cursor)
-        const myPlayer = getState().players.find(p => p.socketId === playerSocketId);
+        const myPlayer = state.players.find(p => p.socketId === myId);
         if (myPlayer) {
           const mdx = mousePosRef.current.x - myPlayer.x;
           const mdy = mousePosRef.current.y - myPlayer.y;
@@ -155,7 +145,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
       }
 
       // Render frame
-      render(ctx, canvas);
+      render(ctx, canvas, state);
       frameRef.current = requestAnimationFrame(loop);
     };
 
@@ -163,171 +153,164 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
-  }, [onMove, playerSocketId, joystickRef]);
+  }, [onMove, joystickRef]);
 
-  // ── Rendering ─────────────────────────────────────────────
+  // ── High Performance Optimized Rendering ──────────────────
 
-  function render(ctx, canvas) {
-    const { players, particles, mySocketId, mapTheme } = getState();
+  function render(ctx, canvas, state) {
+    const { players = [], particles = [], mySocketId, mapTheme, safeZone, slashes = [] } = state;
     const W = canvas.width;
     const H = canvas.height;
 
-    // Background
+    // 1. Background
     ctx.fillStyle = mapTheme?.background || '#0d1520';
     ctx.fillRect(0, 0, W, H);
 
-    // Grid pattern
+    // 2. Grid pattern (Fast batch stroke)
     ctx.strokeStyle = mapTheme?.gridColor || 'rgba(108,99,255,0.06)';
     ctx.lineWidth = 1;
-    for (let x = 0; x < W; x += 40) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    ctx.beginPath();
+    for (let x = 0; x < W; x += 50) {
+      ctx.moveTo(x, 0); ctx.lineTo(x, H);
     }
-    for (let y = 0; y < H; y += 40) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    for (let y = 0; y < H; y += 50) {
+      ctx.moveTo(0, y); ctx.lineTo(W, y);
     }
+    ctx.stroke();
 
-    // Map border glow
-    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(108,99,255,0.4)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, W - 2, H - 2);
+    // 3. Map border
+    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(108,99,255,0.5)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(2, 2, W - 4, H - 4);
 
-    // Draw obstacles (cover/walls)
-    if (mapTheme?.obstacles) {
-      ctx.fillStyle = mapTheme.obstacleColor || 'rgba(100, 100, 100, 0.5)';
-      ctx.strokeStyle = mapTheme.obstacleBorder || 'rgba(255, 255, 255, 0.5)';
+    // 4. Obstacles (Walls / Cover) - Fast Direct Geometry
+    if (mapTheme?.obstacles && mapTheme.obstacles.length > 0) {
+      ctx.fillStyle = mapTheme.obstacleColor || 'rgba(70, 80, 100, 0.7)';
+      ctx.strokeStyle = mapTheme.obstacleBorder || 'rgba(150, 170, 210, 0.8)';
       ctx.lineWidth = 2;
-      for (const obs of mapTheme.obstacles) {
-        ctx.beginPath();
-        ctx.rect(obs.x, obs.y, obs.w, obs.h);
-        ctx.fill();
-        ctx.stroke();
-        
-        // Diagonal hatch pattern for cover illusion
-        ctx.save();
-        ctx.clip();
-        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-        ctx.lineWidth = 1;
-        for (let i = -obs.h; i < obs.w + obs.h; i += 15) {
-          ctx.beginPath();
-          ctx.moveTo(obs.x + i, obs.y);
-          ctx.lineTo(obs.x + i - obs.h, obs.y + obs.h);
-          ctx.stroke();
-        }
-        ctx.restore();
+      for (let i = 0; i < mapTheme.obstacles.length; i++) {
+        const obs = mapTheme.obstacles[i];
+        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
       }
     }
 
-    // Draw bushes
-    if (mapTheme?.bushes) {
-      ctx.fillStyle = mapTheme.bushColor || 'rgba(100, 255, 100, 0.4)';
-      ctx.strokeStyle = mapTheme.bushBorder || 'rgba(50, 200, 50, 0.6)';
+    // 5. Bushes (Hiding zones)
+    if (mapTheme?.bushes && mapTheme.bushes.length > 0) {
+      ctx.fillStyle = mapTheme.bushColor || 'rgba(46, 213, 115, 0.35)';
+      ctx.strokeStyle = mapTheme.bushBorder || 'rgba(46, 213, 115, 0.6)';
       ctx.lineWidth = 2;
-      for (const bush of mapTheme.bushes) {
+      for (let i = 0; i < mapTheme.bushes.length; i++) {
+        const bush = mapTheme.bushes[i];
         ctx.beginPath();
-        ctx.rect(bush.x, bush.y, bush.w, bush.h);
+        roundRectPath(ctx, bush.x, bush.y, bush.w, bush.h, 8);
         ctx.fill();
         ctx.stroke();
-        
-        // Add some leaf-like details
-        ctx.save();
-        ctx.clip();
-        ctx.fillStyle = mapTheme.bushBorder || 'rgba(50, 200, 50, 0.6)';
-        for (let i = 0; i < bush.w; i += 30) {
-          for (let j = 0; j < bush.h; j += 30) {
-            ctx.beginPath();
-            ctx.arc(bush.x + i + 15, bush.y + j + 15, 8, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-        ctx.restore();
       }
     }
 
-    // Draw safe zone
-    const safeZone = getState().safeZone;
+    // 6. Safe zone (Poison storm)
     if (safeZone) {
-      // Draw outer poison area
       ctx.save();
       ctx.beginPath();
-      ctx.rect(0, 0, W, H); // Full screen
-      ctx.arc(safeZone.x, safeZone.y, safeZone.radius, 0, Math.PI * 2, true); // Hole
-      ctx.fillStyle = 'rgba(80, 0, 150, 0.4)'; // Darker purple poison
+      ctx.rect(0, 0, W, H);
+      ctx.arc(safeZone.x, safeZone.y, Math.max(0, safeZone.radius), 0, Math.PI * 2, true);
+      ctx.fillStyle = 'rgba(120, 20, 200, 0.35)';
       ctx.fill();
-      
-      // Draw safe zone border
+
+      // Safe zone double-ring border (Zero lag alternative to shadowBlur)
       ctx.beginPath();
-      ctx.arc(safeZone.x, safeZone.y, safeZone.radius, 0, Math.PI * 2);
-      ctx.strokeStyle = '#ff00ff';
-      ctx.lineWidth = 4;
-      ctx.shadowColor = '#ff00ff';
-      ctx.shadowBlur = 15;
+      ctx.arc(safeZone.x, safeZone.y, Math.max(0, safeZone.radius), 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 0, 255, 0.3)';
+      ctx.lineWidth = 8;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(safeZone.x, safeZone.y, Math.max(0, safeZone.radius), 0, Math.PI * 2);
+      ctx.strokeStyle = '#FF00FF';
+      ctx.lineWidth = 3;
       ctx.stroke();
       ctx.restore();
     }
 
-    // Draw particles (collectible dots)
-    for (const p of particles) {
-      const t = Date.now() / 600;
-      const pulse = 1 + 0.2 * Math.sin(t + p.x);
+    // 7. Particles (Collectible Dots) - Highly Optimized Batch Loop
+    if (particles.length > 0) {
+      const t = Date.now() / 700;
+      const defaultColor = mapTheme?.particleColor || '#FFD700';
 
-      const color = mapTheme?.particleColor || p.color || '#FFD700';
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        const pulse = 1 + 0.15 * Math.sin(t + p.x * 0.1);
+        const r = PARTICLE_RADIUS * pulse;
+        const color = p.color || defaultColor;
 
-      ctx.save();
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, PARTICLE_RADIUS * pulse, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+        // Outer soft glow halo
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.25)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r + 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner bright core
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
-    // Draw players
-    for (const player of players) {
-      drawPlayer(ctx, player, player.socketId === mySocketId);
+    // 8. Players
+    for (let i = 0; i < players.length; i++) {
+      drawPlayer(ctx, players[i], players[i].socketId === mySocketId, slashes);
     }
 
-    // Draw slashes
-    for (const slash of getState().slashes) {
-      drawSlash(ctx, slash);
+    // 9. Slashes (Attack Animations)
+    if (slashes.length > 0) {
+      const now = Date.now();
+      for (let i = 0; i < slashes.length; i++) {
+        const slash = slashes[i];
+        const age = now - slash.createdAt;
+        if (age <= 220) {
+          drawSlash(ctx, slash, age);
+        }
+      }
     }
   }
 
-  function drawSlash(ctx, slash) {
-    const age = Date.now() - slash.createdAt;
-    if (age > 200) return;
-
-    const progress = age / 200; // 0 to 1
+  function drawSlash(ctx, slash, age) {
+    const progress = age / 220; // 0 to 1
     const angle = Math.atan2(slash.facingY || 0, slash.facingX || 1);
-    
+    const attackerRadius = slash.radius || 16;
+    const radius = attackerRadius * 1.4 + progress * attackerRadius;
+    const alpha = Math.max(0, 1 - progress);
+
     ctx.save();
     ctx.translate(slash.x, slash.y);
     ctx.rotate(angle);
-    
-    // Scale visual slash based on attacker's radius (fallback to 16)
-    const attackerRadius = slash.radius || 16;
-    const baseVisualRadius = attackerRadius * 1.5; 
-    const radius = baseVisualRadius + progress * attackerRadius;
-    
+
+    // Outer glow blade
     ctx.beginPath();
-    ctx.arc(0, 0, radius, -Math.PI/2, Math.PI/2, false);
-    
-    ctx.lineWidth = 5 * (1 - progress);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${1 - progress})`;
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = '#fff';
+    ctx.arc(0, 0, radius, -Math.PI / 2.2, Math.PI / 2.2, false);
+    ctx.lineWidth = 8 * alpha;
+    ctx.strokeStyle = `rgba(255, 100, 100, ${alpha * 0.4})`;
+    ctx.stroke();
+
+    // Sharp cutting edge
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, -Math.PI / 2.2, Math.PI / 2.2, false);
+    ctx.lineWidth = 3 * alpha;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
     ctx.stroke();
 
     ctx.restore();
   }
 
-  function drawPlayer(ctx, player, isMe) {
+  function drawPlayer(ctx, player, isMe, slashes) {
     const radius = player.radius || PLAYER_RADIUS;
 
     if (!player.alive || player.respawning) {
-      // Draw ghost/dead/respawning indicator
+      // Ghost / Respawning indicator
       ctx.save();
-      ctx.globalAlpha = 0.3;
+      ctx.globalAlpha = 0.35;
       ctx.fillStyle = player.color || '#888';
       ctx.beginPath();
       ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
@@ -337,18 +320,19 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
     }
 
     ctx.save();
-    
-    // If player is in bush, make them transparent
-    if (player.inBushId !== null) {
-      ctx.globalAlpha = 0.6;
+    if (player.inBushId !== null && player.inBushId !== undefined) {
+      ctx.globalAlpha = 0.5;
     }
 
-    // Glow for current player
+    // Outer self aura
     if (isMe) {
-      ctx.shadowColor = player.color || '#4A90D9';
-      ctx.shadowBlur = 20;
+      ctx.fillStyle = 'rgba(108, 99, 255, 0.25)';
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, radius + 7, 0, Math.PI * 2);
+      ctx.fill();
     }
 
+    // Avatar Image or Vector Circle
     const avatarImg = getImage(player.avatarUrl);
     if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
       ctx.save();
@@ -358,26 +342,25 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
       ctx.drawImage(avatarImg, player.x - radius, player.y - radius, radius * 2, radius * 2);
       ctx.restore();
 
-      ctx.strokeStyle = isMe ? '#fff' : 'rgba(255,255,255,0.4)';
+      ctx.strokeStyle = isMe ? '#FFFFFF' : 'rgba(255,255,255,0.5)';
       ctx.lineWidth = isMe ? 2.5 : 1.5;
       ctx.beginPath();
       ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
       ctx.stroke();
     } else {
-      // Fallback Player body
       ctx.fillStyle = player.color || '#4A90D9';
       ctx.beginPath();
       ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Inner circle (pupil / design)
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      // Eye / Pupil
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.beginPath();
       ctx.arc(player.x - radius * 0.25, player.y - radius * 0.25, radius * 0.4, 0, Math.PI * 2);
       ctx.fill();
 
-      // Outline
-      ctx.strokeStyle = isMe ? '#fff' : 'rgba(255,255,255,0.4)';
+      // Border
+      ctx.strokeStyle = isMe ? '#FFFFFF' : 'rgba(255,255,255,0.5)';
       ctx.lineWidth = isMe ? 2.5 : 1.5;
       ctx.beginPath();
       ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
@@ -385,67 +368,55 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
     }
     ctx.restore();
 
-    // Draw Weapon with swing animation
+    // Weapon
     const weaponImg = getImage(player.weaponUrl);
     if (weaponImg && weaponImg.complete && weaponImg.naturalWidth > 0) {
-      // Calculate swing animation based on recent slash
-      const recentSlash = getState().slashes.find(s => s.attackerSocketId === player.socketId);
+      const recentSlash = slashes?.find(s => s.attackerSocketId === player.socketId);
       let swingAngle = 0;
       if (recentSlash) {
         const age = Date.now() - recentSlash.createdAt;
-        if (age < 200) {
-          const progress = age / 200; // 0 to 1
-          // Swing from -60 degrees to +60 degrees
+        if (age < 220) {
+          const progress = age / 220;
           swingAngle = (progress * Math.PI) - (Math.PI / 2);
         }
       }
 
       const angle = Math.atan2(player.facingY || 0, player.facingX || 1) + swingAngle;
-      
       ctx.save();
       ctx.translate(player.x, player.y);
       ctx.rotate(angle);
-      
-      // Weapon scales with player radius
       const weaponSize = radius * 1.5;
       ctx.drawImage(weaponImg, radius - 4, -weaponSize / 2, weaponSize, weaponSize);
       ctx.restore();
     }
 
-    // HP bar
-    const hpRatio = player.hp / player.maxHp;
+    // HP Bar
+    const hpRatio = Math.max(0, Math.min(1, player.hp / player.maxHp));
     const barX = player.x - HP_BAR_W / 2;
     const barY = player.y - radius - 12;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    roundRect(ctx, barX, barY, HP_BAR_W, HP_BAR_H, 3);
-    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(barX, barY, HP_BAR_W, HP_BAR_H);
 
     ctx.fillStyle = hpRatio > 0.5 ? '#2ED573' : hpRatio > 0.25 ? '#FFA502' : '#FF4757';
-    roundRect(ctx, barX, barY, HP_BAR_W * hpRatio, HP_BAR_H, 3);
-    ctx.fill();
+    ctx.fillRect(barX, barY, HP_BAR_W * hpRatio, HP_BAR_H);
 
-    // Nickname
-    ctx.save();
-    ctx.font = `bold 11px 'Outfit', sans-serif`;
+    // Player Nickname & Score
+    ctx.font = `bold 11px sans-serif`;
     ctx.textAlign = 'center';
-    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-    ctx.shadowBlur = 6;
-    ctx.fillStyle = isMe ? '#fff' : 'rgba(255,255,255,0.85)';
+    ctx.fillStyle = isMe ? '#FFFFFF' : '#DDDDDD';
     ctx.fillText(
       (player.nickname?.length > 10 ? player.nickname.slice(0, 10) + '…' : player.nickname) || '?',
       player.x,
       player.y - radius - 16
     );
-    // Score badge
-    ctx.font = `11px 'JetBrains Mono', monospace`;
+
+    ctx.font = `bold 10px monospace`;
     ctx.fillStyle = '#FFD700';
-    ctx.fillText(`${player.score}`, player.x, player.y + radius + 15);
-    ctx.restore();
+    ctx.fillText(`${player.score || 0}`, player.x, player.y + radius + 14);
   }
 
-  function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
+  function roundRectPath(ctx, x, y, w, h, r) {
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + w - r, y);
     ctx.quadraticCurveTo(x + w, y, x + w, y + r);
@@ -455,7 +426,6 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, mapU
     ctx.quadraticCurveTo(x, y + h, x, y + h - r);
     ctx.lineTo(x, y + r);
     ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
   }
 
   return (
