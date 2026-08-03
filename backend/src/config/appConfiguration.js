@@ -4,22 +4,31 @@ const ENV = require('./env');
 const logger = require('../utils/logger');
 
 const ATTACK_DAMAGE_KEY = 'Game:AttackDamage';
+const MAP_ROTATION_KEY = 'Game:MapRotation';
 const DEFAULT_LABEL = 'Production';
 const DEFAULT_REFRESH_INTERVAL_MS = 5000;
 const MIN_ATTACK_DAMAGE = 1;
 const MAX_ATTACK_DAMAGE = 100;
+const ALLOWED_MAPS = Object.freeze([
+  'ice_map.json',
+  'fire_map.json',
+]);
+const DEFAULT_MAP_ROTATION = Object.freeze([...ALLOWED_MAPS]);
 
 let appConfiguration = null;
 
 const state = {
   service: 'Azure App Configuration',
   key: ATTACK_DAMAGE_KEY,
+  keys: [ATTACK_DAMAGE_KEY, MAP_ROTATION_KEY],
   enabled: false,
   configured: false,
   connected: false,
   source: 'environment-default',
   label: DEFAULT_LABEL,
   attackDamage: ENV.GAME.attackDamage,
+  mapRotation: [...DEFAULT_MAP_ROTATION],
+  mapRotationSource: 'application-default',
   lastRefreshAt: null,
   lastAttemptAt: null,
   lastError: null,
@@ -41,6 +50,44 @@ function parseAttackDamage(value) {
   return parsed;
 }
 
+function parseMapRotation(value) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(
+      `${MAP_ROTATION_KEY} must contain at least one comma-separated map name`
+    );
+  }
+
+  const mapRotation = [...new Set(
+    value
+      .split(',')
+      .map((mapName) => mapName.trim())
+      .filter(Boolean)
+  )];
+
+  if (mapRotation.length === 0) {
+    throw new Error(
+      `${MAP_ROTATION_KEY} must contain at least one comma-separated map name`
+    );
+  }
+
+  const unsupportedMaps = mapRotation.filter(
+    (mapName) => !ALLOWED_MAPS.includes(mapName)
+  );
+
+  if (unsupportedMaps.length > 0) {
+    throw new Error(
+      `${MAP_ROTATION_KEY} contains unsupported map(s): ${unsupportedMaps.join(', ')}`
+    );
+  }
+
+  return mapRotation;
+}
+
+function rotationsEqual(left, right) {
+  return left.length === right.length
+    && left.every((mapName, index) => mapName === right[index]);
+}
+
 function getRefreshIntervalMs() {
   const parsed = Number.parseInt(
     process.env.AZURE_APPCONFIG_REFRESH_INTERVAL_MS,
@@ -58,32 +105,54 @@ function getAppConfigurationStatus() {
   return {
     ...state,
     attackDamage: ENV.GAME.attackDamage,
+    mapRotation: [...state.mapRotation],
   };
 }
 
-function applyAttackDamage() {
+function getMapRotation() {
+  return [...state.mapRotation];
+}
+
+function applyGameplayConfiguration() {
   if (!appConfiguration) {
     throw new Error('Azure App Configuration provider is not initialized');
   }
 
-  const rawValue = appConfiguration.get(ATTACK_DAMAGE_KEY);
-  if (rawValue === undefined || rawValue === null || rawValue === '') {
+  const rawAttackDamage = appConfiguration.get(ATTACK_DAMAGE_KEY);
+  if (
+    rawAttackDamage === undefined
+    || rawAttackDamage === null
+    || rawAttackDamage === ''
+  ) {
     throw new Error(
       `${ATTACK_DAMAGE_KEY} was not found for label ${state.label}`
     );
   }
 
-  const attackDamage = parseAttackDamage(rawValue);
+  const rawMapRotation = appConfiguration.get(MAP_ROTATION_KEY);
+  const hasMapRotation = rawMapRotation !== undefined && rawMapRotation !== null;
+  const attackDamage = parseAttackDamage(rawAttackDamage);
+  const mapRotation = hasMapRotation
+    ? parseMapRotation(rawMapRotation)
+    : [...DEFAULT_MAP_ROTATION];
+
   const previousDamage = ENV.GAME.attackDamage;
+  const previousMapRotation = state.mapRotation;
+  const damageChanged = previousDamage !== attackDamage;
+  const mapRotationChanged = !rotationsEqual(previousMapRotation, mapRotation);
 
   ENV.GAME.attackDamage = attackDamage;
   state.connected = true;
   state.source = 'azure-app-configuration';
   state.attackDamage = attackDamage;
+  state.mapRotation = mapRotation;
+  state.mapRotationSource = hasMapRotation
+    ? 'azure-app-configuration'
+    : 'application-default';
   state.lastRefreshAt = new Date().toISOString();
   state.lastError = null;
 
-  if (previousDamage !== attackDamage) {
+  if (damageChanged) {
     logger.info('[AppConfig] Game attack damage updated', {
       previousDamage,
       attackDamage,
@@ -91,7 +160,23 @@ function applyAttackDamage() {
     });
   }
 
-  return previousDamage !== attackDamage;
+  if (mapRotationChanged) {
+    logger.info('[AppConfig] Game map rotation updated', {
+      previousMapRotation,
+      mapRotation,
+      label: state.label,
+    });
+  }
+
+  if (!hasMapRotation) {
+    logger.warn('[AppConfig] Game map rotation key is missing; using defaults', {
+      key: MAP_ROTATION_KEY,
+      mapRotation,
+      label: state.label,
+    });
+  }
+
+  return damageChanged || mapRotationChanged;
 }
 
 async function initializeAppConfiguration() {
@@ -99,6 +184,8 @@ async function initializeAppConfiguration() {
   state.configured = Boolean(process.env.AZURE_APPCONFIG_ENDPOINT);
   state.label = process.env.AZURE_APPCONFIG_LABEL || DEFAULT_LABEL;
   state.attackDamage = ENV.GAME.attackDamage;
+  state.mapRotation = [...DEFAULT_MAP_ROTATION];
+  state.mapRotationSource = 'application-default';
 
   if (!state.enabled) {
     logger.info('[AppConfig] Integration disabled; using default attack damage', {
@@ -129,6 +216,10 @@ async function initializeAppConfiguration() {
             keyFilter: ATTACK_DAMAGE_KEY,
             labelFilter: state.label,
           },
+          {
+            keyFilter: MAP_ROTATION_KEY,
+            labelFilter: state.label,
+          },
         ],
         refreshOptions: {
           enabled: true,
@@ -142,7 +233,7 @@ async function initializeAppConfiguration() {
 
     appConfiguration.onRefresh(() => {
       try {
-        applyAttackDamage();
+        applyGameplayConfiguration();
       } catch (error) {
         state.lastError = error.message;
         logger.error('[AppConfig] Refreshed value was rejected', {
@@ -151,11 +242,13 @@ async function initializeAppConfiguration() {
       }
     });
 
-    applyAttackDamage();
+    applyGameplayConfiguration();
     logger.info('[AppConfig] Azure App Configuration connected', {
-      key: ATTACK_DAMAGE_KEY,
+      keys: state.keys,
       label: state.label,
       attackDamage: ENV.GAME.attackDamage,
+      mapRotation: state.mapRotation,
+      mapRotationSource: state.mapRotationSource,
     });
   } catch (error) {
     appConfiguration = null;
@@ -182,18 +275,22 @@ async function refreshAppConfiguration() {
 
   state.lastAttemptAt = new Date().toISOString();
   const previousDamage = ENV.GAME.attackDamage;
+  const previousMapRotation = [...state.mapRotation];
 
   try {
     await appConfiguration.refresh();
-    const changed = applyAttackDamage();
+    const changed = applyGameplayConfiguration();
+    const valueChanged = previousDamage !== ENV.GAME.attackDamage
+      || !rotationsEqual(previousMapRotation, state.mapRotation);
 
     logger.info('[AppConfig] Manual refresh completed', {
-      changed,
+      changed: changed || valueChanged,
       attackDamage: ENV.GAME.attackDamage,
+      mapRotation: state.mapRotation,
     });
 
     return {
-      changed: changed || previousDamage !== ENV.GAME.attackDamage,
+      changed: changed || valueChanged,
       status: getAppConfigurationStatus(),
     };
   } catch (error) {
@@ -211,8 +308,13 @@ async function refreshAppConfiguration() {
 
 module.exports = {
   ATTACK_DAMAGE_KEY,
+  MAP_ROTATION_KEY,
+  ALLOWED_MAPS,
+  DEFAULT_MAP_ROTATION,
   initializeAppConfiguration,
   refreshAppConfiguration,
   getAppConfigurationStatus,
+  getMapRotation,
   parseAttackDamage,
+  parseMapRotation,
 };
