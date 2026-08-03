@@ -1,12 +1,15 @@
-// src/game/Matchmaker.js - Quick Match queue handling
+// src/game/Matchmaker.js - Quick Match queue handling (Min 4, Max 8 players)
 const { getRedis } = require('../config/redis');
 const { Room } = require('../models');
 const { generateRoomCode } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
 const QUEUE_KEY = 'qm_queue';
-const PLAYERS_NEEDED = 8;
-const TICK_RATE = 2000;
+const MIN_PLAYERS = 4;
+const MAX_PLAYERS = 8;
+const MIN_WAIT_TIMEOUT_MS = 6000; // 6s wait time once min 4 players reached before launching match
+const TICK_RATE = 1000; // Check every 1s for responsive matchmaking
+
 let ioInstance = null;
 let intervalId = null;
 
@@ -15,7 +18,7 @@ class Matchmaker {
     ioInstance = io;
     if (intervalId) clearInterval(intervalId);
     intervalId = setInterval(Matchmaker.tick, TICK_RATE);
-    logger.info('[Matchmaker] Initialized (8 Players Matchmaking)');
+    logger.info(`[Matchmaker] Initialized (Min ${MIN_PLAYERS}, Max ${MAX_PLAYERS} Players Matchmaking)`);
   }
 
   static async broadcastQueueUpdate() {
@@ -24,13 +27,26 @@ class Matchmaker {
     try {
       const items = await redis.lRange(QUEUE_KEY, 0, -1);
       const count = items.length;
+      
+      let startingIn = null;
+      if (count >= MIN_PLAYERS && count < MAX_PLAYERS && items.length > 0) {
+        try {
+          const firstPlayer = JSON.parse(items[0]);
+          const elapsed = Date.now() - (firstPlayer.joinedAt || Date.now());
+          startingIn = Math.max(0, Math.ceil((MIN_WAIT_TIMEOUT_MS - elapsed) / 1000));
+        } catch (e) {}
+      }
+
       for (const item of items) {
         try {
           const p = JSON.parse(item);
           if (p.socketId) {
             ioInstance.to(p.socketId).emit('quick_match_queue_update', {
               current: count,
-              needed: PLAYERS_NEEDED,
+              min: MIN_PLAYERS,
+              max: MAX_PLAYERS,
+              needed: MAX_PLAYERS,
+              startingIn: startingIn,
             });
           }
         } catch (err) {}
@@ -44,11 +60,19 @@ class Matchmaker {
     const redis = getRedis();
     if (!redis) return;
     
-    // First try to remove to avoid duplicates
-    await Matchmaker.leave(playerData);
+    // First remove existing entry for this user/socket to avoid duplicates
+    await Matchmaker.leaveBySocket(playerData.socketId);
+    if (playerData.userId) {
+      await Matchmaker.leaveByUserId(playerData.userId);
+    }
     
-    await redis.rPush(QUEUE_KEY, JSON.stringify(playerData));
-    logger.info(`[Matchmaker] Player joined queue: ${playerData.nickname}`);
+    const entry = {
+      ...playerData,
+      joinedAt: Date.now(),
+    };
+
+    await redis.rPush(QUEUE_KEY, JSON.stringify(entry));
+    logger.info(`[Matchmaker] Player joined queue: ${playerData.nickname} (${playerData.socketId})`);
     
     await Matchmaker.broadcastQueueUpdate();
   }
@@ -56,34 +80,53 @@ class Matchmaker {
   static async leave(playerData) {
     const redis = getRedis();
     if (!redis) return;
-    
-    // Remove by stringified value
-    await redis.lRem(QUEUE_KEY, 0, JSON.stringify(playerData));
-    logger.info(`[Matchmaker] Player left queue: ${playerData.nickname}`);
+    if (playerData.socketId) {
+      await Matchmaker.leaveBySocket(playerData.socketId);
+    } else if (playerData.userId) {
+      await Matchmaker.leaveByUserId(playerData.userId);
+    }
+  }
 
-    await Matchmaker.broadcastQueueUpdate();
+  static async leaveByUserId(userId) {
+    const redis = getRedis();
+    if (!redis) return;
+    try {
+      const items = await redis.lRange(QUEUE_KEY, 0, -1);
+      for (const item of items) {
+        try {
+          const p = JSON.parse(item);
+          if (p.userId === userId) {
+            await redis.lRem(QUEUE_KEY, 0, item);
+            logger.info(`[Matchmaker] Removed userId ${userId} from queue`);
+          }
+        } catch (err) {}
+      }
+    } catch (err) {}
   }
 
   static async leaveBySocket(socketId) {
     const redis = getRedis();
     if (!redis) return;
     
-    // We need to find the item to remove it
-    const items = await redis.lRange(QUEUE_KEY, 0, -1);
-    let removed = false;
-    for (const item of items) {
-      try {
-        const p = JSON.parse(item);
-        if (p.socketId === socketId) {
-          await redis.lRem(QUEUE_KEY, 0, item);
-          logger.info(`[Matchmaker] Removed socket ${socketId} from queue`);
-          removed = true;
-        }
-      } catch (err) {}
-    }
+    try {
+      const items = await redis.lRange(QUEUE_KEY, 0, -1);
+      let removed = false;
+      for (const item of items) {
+        try {
+          const p = JSON.parse(item);
+          if (p.socketId === socketId) {
+            await redis.lRem(QUEUE_KEY, 0, item);
+            logger.info(`[Matchmaker] Removed socket ${socketId} from queue`);
+            removed = true;
+          }
+        } catch (err) {}
+      }
 
-    if (removed) {
-      await Matchmaker.broadcastQueueUpdate();
+      if (removed) {
+        await Matchmaker.broadcastQueueUpdate();
+      }
+    } catch (err) {
+      logger.error('[Matchmaker] Error removing socket from queue', err);
     }
   }
 
@@ -92,28 +135,66 @@ class Matchmaker {
     if (!redis) return;
 
     try {
-      const len = await redis.lLen(QUEUE_KEY);
-      // Periodically keep queue counts in sync for any active waiting users
-      if (len > 0) {
-        await Matchmaker.broadcastQueueUpdate();
+      const items = await redis.lRange(QUEUE_KEY, 0, -1);
+      if (!items || items.length === 0) return;
+
+      // 1. Purge disconnected sockets
+      const validPlayers = [];
+      for (const item of items) {
+        try {
+          const p = JSON.parse(item);
+          if (ioInstance && ioInstance.sockets && ioInstance.sockets.sockets) {
+            const socket = ioInstance.sockets.sockets.get(p.socketId);
+            if (!socket || !socket.connected) {
+              await redis.lRem(QUEUE_KEY, 0, item);
+              logger.info(`[Matchmaker] Cleaned up disconnected socket: ${p.socketId}`);
+              continue;
+            }
+          }
+          validPlayers.push(p);
+        } catch (err) {
+          await redis.lRem(QUEUE_KEY, 0, item);
+        }
       }
 
-      if (len >= PLAYERS_NEEDED) {
-        // Pop players
-        const players = [];
-        for (let i = 0; i < PLAYERS_NEEDED; i++) {
+      const count = validPlayers.length;
+      if (count === 0) return;
+
+      await Matchmaker.broadcastQueueUpdate();
+
+      // 2. Check if we can launch a match
+      let shouldLaunch = false;
+      let playersToLaunch = 0;
+
+      if (count >= MAX_PLAYERS) {
+        // Max 8 players reached -> Launch immediately!
+        shouldLaunch = true;
+        playersToLaunch = MAX_PLAYERS;
+      } else if (count >= MIN_PLAYERS) {
+        // Between 4 and 7 players: check wait timeout
+        const oldestJoinedAt = validPlayers[0].joinedAt || Date.now();
+        const waitTime = Date.now() - oldestJoinedAt;
+        if (waitTime >= MIN_WAIT_TIMEOUT_MS) {
+          shouldLaunch = true;
+          playersToLaunch = Math.min(count, MAX_PLAYERS);
+        }
+      }
+
+      if (shouldLaunch && playersToLaunch >= MIN_PLAYERS) {
+        const launchedPlayers = [];
+        for (let i = 0; i < playersToLaunch; i++) {
           const raw = await redis.lPop(QUEUE_KEY);
-          if (raw) players.push(JSON.parse(raw));
+          if (raw) launchedPlayers.push(JSON.parse(raw));
         }
 
-        if (players.length === PLAYERS_NEEDED) {
-           await Matchmaker.createMatch(players);
-           await Matchmaker.broadcastQueueUpdate();
+        if (launchedPlayers.length >= MIN_PLAYERS) {
+          await Matchmaker.createMatch(launchedPlayers);
+          await Matchmaker.broadcastQueueUpdate();
         } else {
-           // Rollback if something strange happened
-           for (const p of players) {
-             await redis.rPush(QUEUE_KEY, JSON.stringify(p));
-           }
+          // Rollback if pop failed
+          for (const p of launchedPlayers) {
+            await redis.rPush(QUEUE_KEY, JSON.stringify(p));
+          }
         }
       }
     } catch (err) {
@@ -127,21 +208,23 @@ class Matchmaker {
       const room = await Room.create({
         name: 'Quick Match ' + Math.floor(Math.random() * 1000),
         code,
-        max_players: PLAYERS_NEEDED,
-        created_by: players[0].userId, // Arbitrary creator
+        max_players: MAX_PLAYERS,
+        created_by: players[0].userId,
         player_count: 0,
         status: 'waiting',
       });
 
-      logger.info(`[Matchmaker] Quick match created for 8 players: ${code}`);
+      logger.info(`[Matchmaker] Quick match created for ${players.length} players: ${code}`);
 
-      // Notify the players
+      // Notify the matched players
       for (const p of players) {
-        ioInstance.to(p.socketId).emit('match_found', {
-          roomId: room.id,
-          roomCode: code,
-          isQuickMatch: true
-        });
+        if (ioInstance) {
+          ioInstance.to(p.socketId).emit('match_found', {
+            roomId: room.id,
+            roomCode: code,
+            isQuickMatch: true
+          });
+        }
       }
     } catch (err) {
       logger.error('[Matchmaker] Failed to create match', err);

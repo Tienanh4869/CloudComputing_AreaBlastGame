@@ -113,7 +113,9 @@ const GameManager = {
         }
         
         if (data) {
-          mapConfig = { ...mapConfig, ...data, url: mapUrl };
+          // Deep clone the cached data so modifying theme does not pollute cache or other rooms
+          const clonedData = JSON.parse(JSON.stringify(data));
+          mapConfig = { ...mapConfig, ...clonedData, url: mapUrl };
         }
       } catch (err) {
         logger.warn(`[GameManager] Failed to fetch map JSON from Azure Blob, using fallback`, err.message);
@@ -142,6 +144,9 @@ const GameManager = {
           bushColor: isIceMap ? "rgba(100, 255, 100, 0.4)" : "rgba(200, 200, 50, 0.4)",
           bushBorder: isIceMap ? "rgba(50, 200, 50, 0.6)" : "rgba(150, 150, 20, 0.6)",
         };
+      } else {
+        // Deep clone existing theme to ensure complete room isolation
+        mapConfig.theme = JSON.parse(JSON.stringify(mapConfig.theme));
       }
       mapConfig.theme.obstacles = obstacles;
       mapConfig.theme.bushes = bushes;

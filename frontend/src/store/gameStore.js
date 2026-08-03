@@ -76,6 +76,7 @@ const useGameStore = create((set, get) => ({
     set({
       players:  state.players,
       particles: state.particles,
+      mapTheme: state.mapTheme || get().mapTheme,
       myHp:    me?.hp    ?? get().myHp,
       myMaxHp: me?.maxHp ?? get().myMaxHp,
       myScore: me?.score ?? get().myScore,

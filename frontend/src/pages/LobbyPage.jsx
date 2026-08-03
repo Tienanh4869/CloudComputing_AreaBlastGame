@@ -43,7 +43,7 @@ export default function LobbyPage() {
   const [showJoinCode, setShowJoinCode] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [isFindingMatch, setIsFindingMatch] = useState(false);
-  const [queueInfo, setQueueInfo] = useState({ current: 1, needed: 8 });
+  const [queueInfo, setQueueInfo] = useState({ current: 1, min: 4, max: 8, needed: 8, startingIn: null });
 
   const [joinCode, setJoinCode] = useState('');
   const [newRoom, setNewRoom] = useState({ name: '', max_players: 4 });
@@ -69,13 +69,19 @@ export default function LobbyPage() {
       
       const handleMatchFound = ({ roomId, roomCode, isQuickMatch }) => {
         setIsFindingMatch(false);
-        toast.success('Match Found! Joining 8-player battle...');
+        toast.success('Match Found! Entering arena...');
         // We can just create a dummy room object since GamePage only needs roomId initially
         handleJoinRoom({ id: roomId, code: roomCode });
       };
 
-      const handleQueueUpdate = ({ current, needed }) => {
-        setQueueInfo({ current, needed: needed || 8 });
+      const handleQueueUpdate = (data) => {
+        setQueueInfo({
+          current: data.current || 1,
+          min: data.min || 4,
+          max: data.max || 8,
+          needed: data.needed || data.max || 8,
+          startingIn: data.startingIn !== undefined ? data.startingIn : null,
+        });
       };
 
       socket.on('global_chat_message', handleGlobalChat);
@@ -455,33 +461,56 @@ export default function LobbyPage() {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300,
           display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)'
         }}>
-          <div className="card animate-fade-in" style={{ width: 400, padding: 32, textAlign: 'center', border: '1px solid rgba(0, 200, 255, 0.4)', boxShadow: '0 8px 32px rgba(0, 200, 255, 0.2)' }}>
+          <div className="card animate-fade-in" style={{ width: 420, padding: 32, textAlign: 'center', border: '1px solid rgba(0, 200, 255, 0.4)', boxShadow: '0 8px 32px rgba(0, 200, 255, 0.2)' }}>
             <div className="spinner" style={{ width: 52, height: 52, margin: '0 auto 20px', borderWidth: 4, borderColor: 'rgba(0, 200, 255, 0.2)', borderTopColor: '#00d2ff' }} />
-            <h3 style={{ marginBottom: 10, fontSize: '1.4rem' }} className="gradient-text">🎯 Finding 8-Player Match...</h3>
+            <h3 style={{ marginBottom: 6, fontSize: '1.4rem' }} className="gradient-text">🎯 Ghép Trận Ngẫu Nhiên</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 16 }}>
+              (Tối thiểu 4 người — Tối đa 8 người)
+            </p>
             
             <div style={{ margin: '18px 0', padding: '14px 16px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: '0.95rem', fontWeight: 'bold' }}>
-                <span>Players in Queue:</span>
-                <span style={{ color: '#00ffcc' }}>{queueInfo.current} / {queueInfo.needed}</span>
+                <span>Đang chờ trong hàng:</span>
+                <span style={{ color: queueInfo.current >= (queueInfo.min || 4) ? '#00ffcc' : '#ffcc00' }}>
+                  {queueInfo.current} / {queueInfo.max || 8} Người
+                </span>
               </div>
               
               {/* Progress Bar */}
               <div style={{ width: '100%', height: 10, background: 'rgba(255,255,255,0.1)', borderRadius: 5, overflow: 'hidden' }}>
                 <div style={{
-                  width: `${Math.min(100, Math.max(12, (queueInfo.current / queueInfo.needed) * 100))}%`,
+                  width: `${Math.min(100, Math.max(12, (queueInfo.current / (queueInfo.max || 8)) * 100))}%`,
                   height: '100%',
-                  background: 'linear-gradient(90deg, #00c6ff, #0072ff)',
+                  background: queueInfo.current >= (queueInfo.min || 4)
+                    ? 'linear-gradient(90deg, #00f2fe, #4facfe)'
+                    : 'linear-gradient(90deg, #f6d365, #fda085)',
                   borderRadius: 5,
                   transition: 'width 0.4s ease'
                 }} />
               </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: 8, marginBottom: 0 }}>
-                {queueInfo.current >= queueInfo.needed ? '🚀 Starting battle...' : `Waiting for ${queueInfo.needed - queueInfo.current} more player${queueInfo.needed - queueInfo.current > 1 ? 's' : ''}...`}
-              </p>
+              
+              <div style={{ marginTop: 10 }}>
+                {queueInfo.current >= (queueInfo.max || 8) ? (
+                  <p style={{ color: '#00ffcc', fontSize: '0.88rem', fontWeight: 'bold', margin: 0 }}>
+                    🚀 Đủ 8 người! Đang khởi tạo trận đấu...
+                  </p>
+                ) : queueInfo.current >= (queueInfo.min || 4) ? (
+                  <p style={{ color: '#00ffcc', fontSize: '0.88rem', fontWeight: 'bold', margin: 0 }}>
+                    ⚡ Đã đủ tối thiểu {queueInfo.min || 4} người!
+                    {queueInfo.startingIn !== null && queueInfo.startingIn !== undefined
+                      ? ` Bắt đầu sau ${queueInfo.startingIn}s (hoặc khi đủ 8 người)...`
+                      : ' Chuẩn bị vào trận...'}
+                  </p>
+                ) : (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
+                    Cần thêm {(queueInfo.min || 4) - queueInfo.current} người nữa để đủ điều kiện bắt đầu...
+                  </p>
+                )}
+              </div>
             </div>
 
             <button className="btn btn-secondary btn-full" onClick={cancelQuickMatch} style={{ marginTop: 8 }}>
-              Cancel Search
+              Hủy Tìm Trận
             </button>
           </div>
         </div>

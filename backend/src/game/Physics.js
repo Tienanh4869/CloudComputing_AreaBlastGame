@@ -73,6 +73,47 @@ const normalizeMovement = (dx, dy) => {
 };
 
 /**
+ * Resolve collision and penetration between a circle (player) and a rectangle (obstacle).
+ * Returns pushed-out { x, y } away from obstacle edges if colliding/penetrating.
+ */
+const resolveCircleRectCollision = (circle, rect) => {
+  const closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.w));
+  const closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.h));
+  const distX = circle.x - closestX;
+  const distY = circle.y - closestY;
+  const distSq = distX * distX + distY * distY;
+  const radius = circle.radius;
+
+  if (distSq < radius * radius) {
+    const dist = Math.sqrt(distSq);
+    if (dist < 0.0001) {
+      // Circle center is completely inside rectangle - push to nearest edge
+      const left = Math.abs(circle.x - rect.x);
+      const right = Math.abs(rect.x + rect.w - circle.x);
+      const top = Math.abs(circle.y - rect.y);
+      const bottom = Math.abs(rect.y + rect.h - circle.y);
+      const min = Math.min(left, right, top, bottom);
+
+      if (min === left) return { x: rect.x - radius - 1, y: circle.y };
+      if (min === right) return { x: rect.x + rect.w + radius + 1, y: circle.y };
+      if (min === top) return { x: circle.x, y: rect.y - radius - 1 };
+      return { x: circle.x, y: rect.y + rect.h + radius + 1 };
+    } else {
+      // Push out along the contact normal with a 1px buffer
+      const overlap = (radius - dist) + 1;
+      const nx = distX / dist;
+      const ny = distY / dist;
+      return {
+        x: circle.x + nx * overlap,
+        y: circle.y + ny * overlap,
+      };
+    }
+  }
+
+  return { x: circle.x, y: circle.y };
+};
+
+/**
  * Generate a random map position away from edges.
  */
 const randomMapPosition = (mapWidth, mapHeight, margin = 50) => ({
@@ -83,6 +124,7 @@ const randomMapPosition = (mapWidth, mapHeight, margin = 50) => ({
 module.exports = {
   circleCollide,
   circleRectCollide,
+  resolveCircleRectCollision,
   lineRectCollide,
   distance,
   clampToMap,
