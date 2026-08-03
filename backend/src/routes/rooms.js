@@ -51,6 +51,13 @@ router.post('/',
       }
 
       const { name, max_players = 4 } = req.body;
+      
+      const { moderateText } = require('../services/contentSafetyService');
+      const { isSafe } = await moderateText(name);
+      if (!isSafe) {
+        return res.status(400).json({ error: 'Tên phòng chứa từ ngữ không phù hợp.' });
+      }
+
       const code = generateRoomCode();
 
       const room = await Room.create({
