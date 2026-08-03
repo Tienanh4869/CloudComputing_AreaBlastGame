@@ -2,7 +2,7 @@
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const { JWT_SECRET, GAME } = env;
-const { User, Player, Room, Match, MatchPlayer, MatchEvent } = require('../models');
+const { User, Player, Room, Match, MatchPlayer, MatchEvent, LeaderboardScore } = require('../models');
 const GameManager = require('../game/GameManager');
 const Matchmaker = require('../game/Matchmaker');
 const { metrics, increment, decrement } = require('../utils/metrics');
@@ -505,12 +505,39 @@ const initSocket = (io) => {
         duration_seconds: results.duration,
       });
 
-      // Update match_players stats (Still keep this in backend to record the match history)
+      // Update match_players stats & directly increment Player profile stats
       for (const ranking of results.rankings) {
+        if (!ranking.playerId) continue;
         await MatchPlayer.update(
           { score: ranking.score, kills: ranking.kills, deaths: ranking.deaths, rank: ranking.rank },
           { where: { match_id: match.id, player_id: ranking.playerId } }
         );
+
+        const isWin = ranking.rank === 1 ? 1 : 0;
+        const isLoss = ranking.rank > 1 ? 1 : 0;
+
+        await Player.increment({
+          total_score: ranking.score || 0,
+          kills: ranking.kills || 0,
+          deaths: ranking.deaths || 0,
+          wins: isWin,
+          losses: isLoss,
+        }, { where: { id: ranking.playerId } }).catch((err) => {
+          logger.error('[Socket] Failed to increment player stats', err);
+        });
+
+        // Also update leaderboard_scores for all_time
+        try {
+          const lb = await LeaderboardScore.findOne({
+            where: { player_id: ranking.playerId, period: 'all_time' },
+          });
+          if (lb) {
+            await lb.increment({
+              score: ranking.score || 0,
+              kills: ranking.kills || 0,
+            });
+          }
+        } catch (e) {}
       }
 
       // Save event log to DB
