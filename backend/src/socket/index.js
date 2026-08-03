@@ -578,7 +578,9 @@ const initSocket = (io) => {
                 event: 'match_ended',
                 playerId: ranking.playerId,
                 score: ranking.score,
-                kills: ranking.kills
+                kills: ranking.kills,
+                deaths: ranking.deaths,
+                rank: ranking.rank
               })
             }).catch(() => {});
           } catch (e) {}
