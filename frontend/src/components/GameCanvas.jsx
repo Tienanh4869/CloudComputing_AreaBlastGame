@@ -24,6 +24,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
   const canvasRef = useRef(null);
   const keysRef = useRef(new Set());
   const frameRef = useRef(null);
+  const renderPlayersRef = useRef(new Map());
 
   // Subscribe to game state directly for rendering without triggering React re-renders
   const getState = () => useGameStore.getState();
@@ -159,6 +160,35 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
 
   function render(ctx, canvas, state) {
     const { players = [], particles = [], mySocketId, mapTheme, safeZone, slashes = [] } = state;
+    
+    // --- LERP PLAYERS TO PREVENT JITTER ---
+    const renderPlayers = renderPlayersRef.current;
+    const currentIds = new Set(players.map(p => p.socketId));
+    for (const id of renderPlayers.keys()) {
+      if (!currentIds.has(id)) renderPlayers.delete(id);
+    }
+    
+    const lerpedPlayers = [];
+    for (let i = 0; i < players.length; i++) {
+      const pl = players[i];
+      let rPlayer = renderPlayers.get(pl.socketId);
+      if (!rPlayer) {
+        rPlayer = { x: pl.x, y: pl.y };
+        renderPlayers.set(pl.socketId, rPlayer);
+      } else {
+        const distSq = (pl.x - rPlayer.x)**2 + (pl.y - rPlayer.y)**2;
+        if (distSq > 150000) { 
+           rPlayer.x = pl.x;
+           rPlayer.y = pl.y;
+        } else {
+           rPlayer.x += (pl.x - rPlayer.x) * 0.25; 
+           rPlayer.y += (pl.y - rPlayer.y) * 0.25;
+        }
+      }
+      lerpedPlayers.push({ ...pl, x: rPlayer.x, y: rPlayer.y });
+    }
+    // ---------------------------------------
+
     const W = canvas.width;
     const H = canvas.height;
 
@@ -259,8 +289,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     }
 
     // 8. Players
-    for (let i = 0; i < players.length; i++) {
-      drawPlayer(ctx, players[i], players[i].socketId === mySocketId, slashes);
+    for (let i = 0; i < lerpedPlayers.length; i++) {
+      drawPlayer(ctx, lerpedPlayers[i], lerpedPlayers[i].socketId === mySocketId, slashes);
     }
 
     // 9. Slashes (Attack Animations)
