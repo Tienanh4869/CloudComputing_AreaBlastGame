@@ -74,7 +74,6 @@ export default function MobileControls({ joystickRef, onAttack }) {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch (_) {}
     updateJoystickPos(e.clientX, e.clientY);
-    if (navigator.vibrate) navigator.vibrate(8);
   };
 
   const handlePointerMove = (e) => {
@@ -106,7 +105,6 @@ export default function MobileControls({ joystickRef, onAttack }) {
     if (e.cancelable) e.preventDefault();
     e.stopPropagation();
     setIsAttacking(true);
-    if (navigator.vibrate) navigator.vibrate(15);
     onAttack?.();
   };
 
