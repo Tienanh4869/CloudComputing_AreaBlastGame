@@ -69,10 +69,13 @@ export const useSocket = () => {
     });
 
     // Confirmed join — server acknowledged our join_room
-    socket.on('room_joined', ({ roomId, state, mapWidth, mapHeight, mapUrl, mapTheme, isHost }) => {
-      console.log('[Socket] room_joined confirmed', { roomId, isHost });
+    socket.on('room_joined', ({ roomId, state, matchStatus, mapWidth, mapHeight, mapUrl, mapTheme, isHost }) => {
+      console.log('[Socket] room_joined confirmed', { roomId, isHost, matchStatus });
       setMapDimensions(mapWidth, mapHeight, mapUrl, mapTheme);
       useGameStore.getState().setIsHost(!!isHost);
+      if (matchStatus) {
+        useGameStore.getState().setMatchStatus(matchStatus);
+      }
       // Update initial game state (players already in room)
       useGameStore.getState().updateGameState(state);
     });
