@@ -72,6 +72,14 @@ router.post('/register', registerRules, async (req, res, next) => {
     const token = signToken(user.id);
 
     logger.info('[Auth] New user registered', { username, userId: user.id });
+    
+    if (ENV.LOGIC_APP_WEBHOOK_URL) {
+      fetch(ENV.LOGIC_APP_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, username })
+      }).catch(err => logger.error('[LogicApp] Failed to trigger welcome email:', err));
+    }
 
     res.status(201).json({
       message: 'Registration successful',

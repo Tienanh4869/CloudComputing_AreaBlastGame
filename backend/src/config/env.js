@@ -82,6 +82,8 @@ const config = {
 
   CONTENT_SAFETY_ENDPOINT: process.env.CONTENT_SAFETY_ENDPOINT || '',
   CONTENT_SAFETY_KEY: process.env.CONTENT_SAFETY_KEY || '',
+  
+  LOGIC_APP_WEBHOOK_URL: process.env.LOGIC_APP_WEBHOOK_URL || '',
 };
 
 config.loadKeyVaultSecrets = async () => {
@@ -148,6 +150,12 @@ config.loadKeyVaultSecrets = async () => {
     if (csKeySecret && csKeySecret.value) {
       config.CONTENT_SAFETY_KEY = csKeySecret.value;
       console.log('[KeyVault] Successfully loaded CONTENT-SAFETY-KEY');
+    }
+    
+    const logicAppUrl = await client.getSecret('LOGIC-APP-WEBHOOK-URL').catch(() => null);
+    if (logicAppUrl && logicAppUrl.value) {
+      config.LOGIC_APP_WEBHOOK_URL = logicAppUrl.value.trim();
+      console.log('[KeyVault] Successfully loaded LOGIC-APP-WEBHOOK-URL');
     }
     
   } catch (err) {
