@@ -50,20 +50,7 @@ router.get('/', async (req, res, next) => {
   if (period === 'all_time') {
     const rows = await sequelize.query(
       `
-        WITH match_activity AS (
-          SELECT
-            mp.player_id,
-            SUM(COALESCE(mp.score, 0)) AS score,
-            SUM(COALESCE(mp.kills, 0)) AS kills,
-            COUNT(*) FILTER (WHERE mp.rank = 1) AS wins
-          FROM match_players AS mp
-          INNER JOIN matches AS m
-            ON m.id = mp.match_id
-          WHERE m.status = 'finished'
-          GROUP BY mp.player_id
-        ),
-
-        quest_activity AS (
+        WITH quest_activity AS (
           SELECT
             q.player_id,
             SUM(
@@ -73,28 +60,10 @@ router.get('/', async (req, res, next) => {
                 WHEN 'DAILY_PLAY_30_MIN' THEN :playReward
                 ELSE 0
               END
-            ) AS score,
-            0 AS kills,
-            0 AS wins
+            ) AS quest_score
           FROM daily_quest_progress AS q
           WHERE q.completed = TRUE
           GROUP BY q.player_id
-        ),
-
-        activity AS (
-          SELECT * FROM match_activity
-          UNION ALL
-          SELECT * FROM quest_activity
-        ),
-
-        totals AS (
-          SELECT
-            player_id,
-            SUM(score) AS score,
-            SUM(kills) AS kills,
-            SUM(wins) AS wins
-          FROM activity
-          GROUP BY player_id
         )
 
         SELECT
@@ -102,15 +71,15 @@ router.get('/', async (req, res, next) => {
           p.nickname,
           p.avatar_color,
           u.username,
-          GREATEST(COALESCE(totals.score, 0), COALESCE(p.total_score, 0)) AS score,
-          GREATEST(COALESCE(totals.kills, 0), COALESCE(p.kills, 0)) AS kills,
-          GREATEST(COALESCE(totals.wins, 0), COALESCE(p.wins, 0)) AS wins
+          (COALESCE(p.total_score, 0) + COALESCE(qa.quest_score, 0)) AS score,
+          COALESCE(p.kills, 0) AS kills,
+          COALESCE(p.wins, 0) AS wins
 
         FROM players AS p
         INNER JOIN users AS u
           ON u.id = p.user_id
-        LEFT JOIN totals
-          ON totals.player_id = p.id
+        LEFT JOIN quest_activity AS qa
+          ON qa.player_id = p.id
 
         ORDER BY
           score DESC,
@@ -286,8 +255,8 @@ router.get('/', async (req, res, next) => {
     }));
   }
 
-    // Cache for 30 seconds
-    await cache.set(cacheKey, ranked, 30);
+    // Cache for 5 seconds
+    await cache.set(cacheKey, ranked, 5);
 
     res.json({ leaderboard: ranked, cached: false });
   } catch (err) { next(err); }
