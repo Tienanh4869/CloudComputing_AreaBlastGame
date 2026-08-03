@@ -28,6 +28,55 @@ class GameRoom {
     this._spawnParticles();
   }
 
+  // ── Safe Zone & Spawn Calculation ────────────────────────────
+
+  _getCurrentSafeZone() {
+    const cx = this.mapConfig.width / 2;
+    const cy = this.mapConfig.height / 2;
+    const maxR = this.maxSafeZoneRadius || (Math.max(this.mapConfig.width, this.mapConfig.height) / 1.8);
+    let safeZoneRadius = maxR;
+    if (this.startedAt && this.matchDuration) {
+      const progress = (Date.now() - this.startedAt) / this.matchDuration;
+      safeZoneRadius = Math.max(80, maxR * (1 - progress));
+    }
+    return { cx, cy, radius: safeZoneRadius };
+  }
+
+  _getRandomSafeSpawnPosition() {
+    const { cx, cy, radius } = this._getCurrentSafeZone();
+    const obstacles = this.mapConfig?.theme?.obstacles || [];
+    const playerRadius = PLAYER_RADIUS + 14; // Buffer margin
+
+    // 1. Try up to 60 attempts to find a position inside safe zone & not in obstacle
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const maxDist = Math.max(20, radius * 0.8);
+      const r = Math.random() * maxDist;
+      const angle = Math.random() * Math.PI * 2;
+      
+      const x = Math.min(Math.max(cx + r * Math.cos(angle), 60), this.mapConfig.width - 60);
+      const y = Math.min(Math.max(cy + r * Math.sin(angle), 60), this.mapConfig.height - 60);
+
+      const collides = obstacles.some(obs => circleRectCollide({ x, y, radius: playerRadius }, obs));
+      if (!collides) {
+        return { x, y };
+      }
+    }
+
+    // 2. Spiral search around center if random tries all hit obstacles
+    for (let step = 0; step < 250; step += 25) {
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+        const x = Math.min(Math.max(cx + step * Math.cos(a), 60), this.mapConfig.width - 60);
+        const y = Math.min(Math.max(cy + step * Math.sin(a), 60), this.mapConfig.height - 60);
+        const collides = obstacles.some(obs => circleRectCollide({ x, y, radius: playerRadius }, obs));
+        if (!collides) {
+          return { x, y };
+        }
+      }
+    }
+
+    return { x: cx, y: cy };
+  }
+
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
@@ -86,7 +135,7 @@ class GameRoom {
   // ── Player Management ────────────────────────────────────────
 
   addPlayer(socketId, playerData) {
-    const pos = randomMapPosition(this.mapConfig.width, this.mapConfig.height, 60);
+    const pos = this._getRandomSafeSpawnPosition();
     const player = {
       socketId,
       playerId: playerData.playerId,
@@ -110,7 +159,7 @@ class GameRoom {
       facingY: 0,
     };
     this.players.set(socketId, player);
-    logger.gameEvent('player_joined', { roomId: this.roomId, nickname: playerData.nickname });
+    logger.gameEvent('player_joined', { roomId: this.roomId, nickname: playerData.nickname, x: pos.x, y: pos.y });
     return player;
   }
 
@@ -218,12 +267,13 @@ class GameRoom {
   _respawnPlayer(socketId) {
     const player = this.players.get(socketId);
     if (!player) return;
-    const pos = randomMapPosition(this.mapConfig.width, this.mapConfig.height, 60);
+    const pos = this._getRandomSafeSpawnPosition();
     player.x = pos.x;
     player.y = pos.y;
     player.hp = GAME.playerHp;
     player.alive = true;
-    logger.gameEvent('player_respawned', { nickname: player.nickname });
+    player.respawning = false;
+    logger.gameEvent('player_respawned', { nickname: player.nickname, x: pos.x, y: pos.y });
   }
 
   // ── Game Tick ────────────────────────────────────────────────
@@ -255,11 +305,11 @@ class GameRoom {
           if (player.respawnTimer <= 0) {
             player.respawning = false;
             player.alive = true; // MUST SET ALIVE TO TRUE!
-            const pos = randomMapPosition(this.mapConfig.width, this.mapConfig.height, 60);
+            const pos = this._getRandomSafeSpawnPosition();
             player.x = pos.x;
             player.y = pos.y;
             player.hp = GAME.playerHp;
-            logger.gameEvent('player_respawned', { nickname: player.nickname });
+            logger.gameEvent('player_respawned', { nickname: player.nickname, x: pos.x, y: pos.y });
           }
         }
         continue;
