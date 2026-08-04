@@ -11,9 +11,17 @@ const getCountryFromIp = async (ipAddress) => {
     return 'UNKNOWN';
   }
 
-  // Handle local development IPs
-  if (ipAddress === '127.0.0.1' || ipAddress === '::1' || ipAddress === '::ffff:127.0.0.1') {
-    return 'LOCAL';
+  // Handle local development IPs (localhost and LAN)
+  if (
+    ipAddress === '127.0.0.1' || 
+    ipAddress === '::1' || 
+    ipAddress === '::ffff:127.0.0.1' ||
+    ipAddress.startsWith('192.168.') ||
+    ipAddress.startsWith('10.') ||
+    ipAddress.startsWith('::ffff:192.168.')
+  ) {
+    console.log('[Azure Maps] Local/LAN IP detected, defaulting to VN for testing');
+    return 'VN'; // Giả lập VN khi chạy Local
   }
 
   try {
