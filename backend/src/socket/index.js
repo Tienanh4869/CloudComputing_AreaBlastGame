@@ -10,6 +10,7 @@ const logger = require('../utils/logger');
 const { ServiceBusClient } = require('@azure/service-bus');
 const { v4: uuidv4 } = require('uuid');
 const { publishGameEvent } = require('../config/serviceBus');
+const { getCountryFromIp } = require('../services/mapsService');
 
 // Init Service Bus Client (if configured)
 // let sbSender = null;
@@ -379,10 +380,15 @@ const initSocket = (io) => {
 
     // ── join_quick_match ─────────────────────────────────────────
     socket.on('join_quick_match', async () => {
+      // Get IP and use Azure Maps to get Region
+      const ip = socket.handshake.headers['x-forwarded-for']?.split(',')[0] || socket.handshake.address;
+      const region = await getCountryFromIp(ip);
+
       await Matchmaker.join({
         socketId: socket.id,
         userId: socket.userId,
         nickname: socket.nickname,
+        region: region,
       });
     });
 
