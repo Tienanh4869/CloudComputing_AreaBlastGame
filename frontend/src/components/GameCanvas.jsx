@@ -267,18 +267,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     let targetCamX = myLerpedPlayer ? myLerpedPlayer.x - viewW / 2 : mapWidth / 2 - viewW / 2;
     let targetCamY = myLerpedPlayer ? myLerpedPlayer.y - viewH / 2 : mapHeight / 2 - viewH / 2;
     
-    // Clamp camera to map boundaries so we don't see the dark void outside the map
-    if (viewW >= mapWidth) {
-      targetCamX = mapWidth / 2 - viewW / 2; // Center horizontally if screen is wider than map
-    } else {
-      targetCamX = Math.max(0, Math.min(targetCamX, mapWidth - viewW));
-    }
-    
-    if (viewH >= mapHeight) {
-      targetCamY = mapHeight / 2 - viewH / 2; // Center vertically if screen is taller than map
-    } else {
-      targetCamY = Math.max(0, Math.min(targetCamY, mapHeight - viewH));
-    }
+    // No camera clamping - camera ALWAYS stays perfectly centered on player
+    // to ensure smooth and predictable controls at map corners.
 
     const camX = Math.round(targetCamX);
     const camY = Math.round(targetCamY);
