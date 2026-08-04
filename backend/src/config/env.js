@@ -84,6 +84,9 @@ const config = {
   CONTENT_SAFETY_KEY: process.env.CONTENT_SAFETY_KEY || '',
   
   LOGIC_APP_WEBHOOK_URL: process.env.LOGIC_APP_WEBHOOK_URL || '',
+
+  AZURE_SPEECH_KEY: process.env.AZURE_SPEECH_KEY || '',
+  AZURE_SPEECH_REGION: process.env.AZURE_SPEECH_REGION || '',
 };
 
 config.loadKeyVaultSecrets = async () => {
@@ -156,6 +159,18 @@ config.loadKeyVaultSecrets = async () => {
     if (logicAppUrl && logicAppUrl.value) {
       config.LOGIC_APP_WEBHOOK_URL = logicAppUrl.value.trim();
       console.log('[KeyVault] Successfully loaded LOGIC-APP-WEBHOOK-URL');
+    }
+
+    const speechKeySecret = await client.getSecret('AZURE-SPEECH-KEY').catch(() => null);
+    if (speechKeySecret && speechKeySecret.value) {
+      config.AZURE_SPEECH_KEY = speechKeySecret.value;
+      console.log('[KeyVault] Successfully loaded AZURE-SPEECH-KEY');
+    }
+
+    const speechRegionSecret = await client.getSecret('AZURE-SPEECH-REGION').catch(() => null);
+    if (speechRegionSecret && speechRegionSecret.value) {
+      config.AZURE_SPEECH_REGION = speechRegionSecret.value;
+      console.log('[KeyVault] Successfully loaded AZURE-SPEECH-REGION');
     }
     
   } catch (err) {

@@ -19,6 +19,7 @@ const matchRoutes = require('./routes/matches');
 const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
 const questRoutes = require('./routes/quests');
+const speechRoutes = require('./routes/speech');
 
 const app = express();
 
@@ -86,6 +87,7 @@ app.use('/api/matches', matchRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/quests', questRoutes);
+app.use('/api/speech', speechRoutes);
 
 // ── Error handling ───────────────────────────────────────────────
 app.use(notFound);
