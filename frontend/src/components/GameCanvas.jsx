@@ -123,8 +123,9 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
 
           const mdx = mousePosRef.current.x - screenCenterX;
           const mdy = mousePosRef.current.y - screenCenterY;
+          // Scale doesn't matter for the angle/direction calculation
           const dist = Math.hypot(mdx, mdy);
-          if (dist > 30) {
+          if (dist > 15) {
             hasActiveSteer = true;
             dx = mdx / dist;
             dy = mdy / dist;
@@ -206,10 +207,19 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     const W = canvas.width;
     const H = canvas.height;
 
-    // Find local player to center camera
-    const myPlayer = players.find((p) => p.socketId === mySocketId);
-    const camX = myPlayer ? myPlayer.x - W / 2 : mapWidth / 2 - W / 2;
-    const camY = myPlayer ? myPlayer.y - H / 2 : mapHeight / 2 - H / 2;
+    // Base zoom: show much more of the map (like EvoWars)
+    // As player levels up, zoom out slightly more
+    const baseScale = 0.6; 
+    const playerLevel = myPlayer ? myPlayer.level : 1;
+    const scale = Math.max(0.15, baseScale - (playerLevel * 0.015));
+
+    // World visible area based on scale
+    const viewW = W / scale;
+    const viewH = H / scale;
+
+    // Center camera on player using scaled viewport
+    const camX = myPlayer ? myPlayer.x - viewW / 2 : mapWidth / 2 - viewW / 2;
+    const camY = myPlayer ? myPlayer.y - viewH / 2 : mapHeight / 2 - viewH / 2;
 
     // --- LERP PLAYERS TO PREVENT JITTER ---
     const renderPlayers = renderPlayersRef.current;
@@ -239,17 +249,18 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     }
     // ---------------------------------------
 
-    // 1. Background
+    // 1. Background (unscaled to fill screen)
     ctx.fillStyle = mapTheme?.background || '#11151c'; // Darker EvoWars style
     ctx.fillRect(0, 0, W, H);
 
     ctx.save();
+    ctx.scale(scale, scale);
     ctx.translate(-camX, -camY);
 
     // 2. Hexagon grid pattern (EvoWars style)
     ctx.strokeStyle = mapTheme?.gridColor || 'rgba(108,99,255,0.05)';
     ctx.lineWidth = 1;
-    drawHexagonGrid(ctx, camX, camY, W, H, 60);
+    drawHexagonGrid(ctx, camX, camY, viewW, viewH, 60);
 
     // 3. Map border
     ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(255,100,100,0.8)';
