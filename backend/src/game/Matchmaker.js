@@ -264,6 +264,7 @@ class Matchmaker {
           ioInstance.to(p.socketId).emit('match_found', {
             roomId: room.id,
             roomCode: code,
+            roomName: room.name,
             isQuickMatch: true
           });
         }
