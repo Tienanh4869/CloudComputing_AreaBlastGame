@@ -319,17 +319,16 @@ class GameRoom {
         if (distToCenter > safeZoneRadius) {
           // Instant death by zone instead of slow HP loss
           player.deaths++;
-            player.respawning = true;
-            player.respawnTimer = 3;
-            // Level reduction
-            player.level = Math.max(1, player.level - 1);
-            player.xp = 0;
-            player.maxXp = 10 * Math.pow(1.5, player.level - 1);
-            
-            this._dropLoot(player.x, player.y, player.score);
-            player.score = 0;
-            this._logEvent('player_died_zone', { playerId: player.playerId, nickname: player.nickname });
-          }
+          player.respawning = true;
+          player.respawnTimer = 3;
+          // Level reduction
+          player.level = Math.max(1, player.level - 1);
+          player.xp = 0;
+          player.maxXp = 10 * Math.pow(1.5, player.level - 1);
+          
+          this._dropLoot(player.x, player.y, player.score);
+          player.score = 0;
+          this._logEvent('player_died_zone', { playerId: player.playerId, nickname: player.nickname });
         }
       }
 
