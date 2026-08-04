@@ -14,7 +14,7 @@ function getImage(url) {
   if (!url) return null;
   if (imageCache.has(url)) return imageCache.get(url);
   const img = new Image();
-  img.crossOrigin = 'Anonymous';
+  // Removed crossOrigin to avoid CORS blocking opponent avatars
   img.src = url;
   imageCache.set(url, img);
   return img;
@@ -51,11 +51,10 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const worldX = (e.clientX - rect.left) * scaleX;
-    const worldY = (e.clientY - rect.top) * scaleY;
-    mousePosRef.current = { x: worldX, y: worldY, active: true };
+    // Mouse coords are relative to window/canvas, we must map them to world later
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    mousePosRef.current = { x: mouseX, y: mouseY, active: true };
   }, []);
 
   const handleMouseLeave = useCallback(() => {
@@ -116,8 +115,14 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
         // 3. Laptop Mouse steering (steer toward cursor)
         const myPlayer = state.players.find(p => p.socketId === myId);
         if (myPlayer) {
-          const mdx = mousePosRef.current.x - myPlayer.x;
-          const mdy = mousePosRef.current.y - myPlayer.y;
+          // mousePosRef is screen coordinate. Center of screen is player.
+          const W = canvas.width;
+          const H = canvas.height;
+          const screenCenterX = W / 2;
+          const screenCenterY = H / 2;
+
+          const mdx = mousePosRef.current.x - screenCenterX;
+          const mdy = mousePosRef.current.y - screenCenterY;
           const dist = Math.hypot(mdx, mdy);
           if (dist > 30) {
             hasActiveSteer = true;
@@ -158,9 +163,54 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
 
   // ── High Performance Optimized Rendering ──────────────────
 
+  function drawHexagonGrid(ctx, cameraX, cameraY, W, H, hexSize) {
+    const hexWidth = hexSize * 2;
+    const hexHeight = Math.sqrt(3) * hexSize;
+    const colSpacing = hexSize * 1.5;
+    const rowSpacing = hexHeight;
+
+    // Calculate grid boundaries based on camera
+    const startCol = Math.floor(cameraX / colSpacing) - 1;
+    const endCol = Math.floor((cameraX + W) / colSpacing) + 1;
+    const startRow = Math.floor(cameraY / rowSpacing) - 1;
+    const endRow = Math.floor((cameraY + H) / rowSpacing) + 1;
+
+    ctx.beginPath();
+    for (let col = startCol; col <= endCol; col++) {
+      for (let row = startRow; row <= endRow; row++) {
+        const cx = col * colSpacing;
+        const cy = row * rowSpacing + (col % 2 === 1 ? rowSpacing / 2 : 0);
+
+        ctx.moveTo(cx + hexSize * Math.cos(0), cy + hexSize * Math.sin(0));
+        for (let i = 1; i <= 6; i++) {
+          ctx.lineTo(
+            cx + hexSize * Math.cos((i * Math.PI) / 3),
+            cy + hexSize * Math.sin((i * Math.PI) / 3)
+          );
+        }
+      }
+    }
+    ctx.stroke();
+  }
+
   function render(ctx, canvas, state) {
-    const { players = [], particles = [], mySocketId, mapTheme, safeZone, slashes = [] } = state;
+    const { players = [], particles = [], mySocketId, mapTheme, slashes = [] } = state;
     
+    // Resize canvas dynamically to match window/container
+    const parent = canvas.parentElement;
+    if (parent && (canvas.width !== parent.clientWidth || canvas.height !== parent.clientHeight)) {
+      canvas.width = parent.clientWidth;
+      canvas.height = parent.clientHeight;
+    }
+
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // Find local player to center camera
+    const myPlayer = players.find((p) => p.socketId === mySocketId);
+    const camX = myPlayer ? myPlayer.x - W / 2 : mapWidth / 2 - W / 2;
+    const camY = myPlayer ? myPlayer.y - H / 2 : mapHeight / 2 - H / 2;
+
     // --- LERP PLAYERS TO PREVENT JITTER ---
     const renderPlayers = renderPlayersRef.current;
     const currentIds = new Set(players.map(p => p.socketId));
@@ -189,29 +239,22 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     }
     // ---------------------------------------
 
-    const W = canvas.width;
-    const H = canvas.height;
-
     // 1. Background
-    ctx.fillStyle = mapTheme?.background || '#0d1520';
+    ctx.fillStyle = mapTheme?.background || '#11151c'; // Darker EvoWars style
     ctx.fillRect(0, 0, W, H);
 
-    // 2. Grid pattern (Fast batch stroke)
-    ctx.strokeStyle = mapTheme?.gridColor || 'rgba(108,99,255,0.06)';
+    ctx.save();
+    ctx.translate(-camX, -camY);
+
+    // 2. Hexagon grid pattern (EvoWars style)
+    ctx.strokeStyle = mapTheme?.gridColor || 'rgba(108,99,255,0.05)';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = 0; x < W; x += 50) {
-      ctx.moveTo(x, 0); ctx.lineTo(x, H);
-    }
-    for (let y = 0; y < H; y += 50) {
-      ctx.moveTo(0, y); ctx.lineTo(W, y);
-    }
-    ctx.stroke();
+    drawHexagonGrid(ctx, camX, camY, W, H, 60);
 
     // 3. Map border
-    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(108,99,255,0.5)';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(2, 2, W - 4, H - 4);
+    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(255,100,100,0.8)';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(0, 0, mapWidth, mapHeight);
 
     // 4. Obstacles (Walls / Cover) - Fast Direct Geometry
     if (mapTheme?.obstacles && mapTheme.obstacles.length > 0) {
@@ -282,6 +325,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
         }
       }
     }
+
+    ctx.restore(); // Restore camera translation
   }
 
   function drawSlash(ctx, slash, age) {
@@ -440,18 +485,14 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
   return (
     <canvas
       ref={canvasRef}
-      width={mapWidth || 1200}
-      height={mapHeight || 800}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onMouseDown={handleCanvasClick}
       style={{
         display: 'block',
-        borderRadius: 8,
+        width: '100%',
+        height: '100%',
         cursor: 'crosshair',
-        maxWidth: '100%',
-        maxHeight: '100%',
-        objectFit: 'contain',
         touchAction: 'none',
       }}
       tabIndex={0}

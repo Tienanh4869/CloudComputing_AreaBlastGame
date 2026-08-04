@@ -11,7 +11,7 @@ const pendingRooms = new Map();
 // Cache fetched maps to avoid hitting Azure Blob Storage repeatedly
 const mapCache = new Map();
 
-function generateProceduralTerrain(width = 8000, height = 8000) {
+function generateProceduralTerrain(width = 16000, height = 16000) {
   // Evowars mode: no obstacles, wide open map
   const obstacles = [];
   const bushes = [];
@@ -82,7 +82,9 @@ const GameManager = {
       }
 
       // Procedurally generate unique random obstacles and bushes for this room
-      const { obstacles, bushes } = generateProceduralTerrain(mapConfig.width, mapConfig.height);
+      const MAP_WIDTH = mapConfig.width || 16000;
+      const MAP_HEIGHT = mapConfig.height || 16000;
+      const { obstacles, bushes } = generateProceduralTerrain(MAP_WIDTH, MAP_HEIGHT);
       if (!mapConfig.theme) {
         mapConfig.theme = {
           background: isIceMap ? "#001a33" : "#330000",
