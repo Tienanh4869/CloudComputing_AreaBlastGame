@@ -207,6 +207,9 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     const W = canvas.width;
     const H = canvas.height;
 
+    // Find local player to center camera
+    const myPlayer = players.find((p) => p.socketId === mySocketId);
+
     // Base zoom: show much more of the map (like EvoWars)
     // As player levels up, zoom out slightly more
     const baseScale = 0.6; 
