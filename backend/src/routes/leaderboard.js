@@ -190,8 +190,8 @@ router.get('/', async (req, res, next) => {
                 END
               ) AS score,
 
-              0 AS kills,
-              0 AS wins
+              0::bigint AS kills,
+              0::bigint AS wins
 
             FROM daily_quest_progress AS q
             CROSS JOIN bounds AS b
