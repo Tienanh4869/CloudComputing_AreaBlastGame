@@ -315,7 +315,7 @@ const initSocket = (io) => {
             killerNickname: socket.nickname,
             targetNickname: hit.target.nickname,
           });
-          if (socket.playerId && hit.target.playerId && gameRoom.matchId) {
+          if (socket.playerId && gameRoom.matchId) {
             publishGameEvent({
               schemaVersion: 1,
               eventId: uuidv4(),
