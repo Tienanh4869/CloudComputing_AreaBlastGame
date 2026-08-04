@@ -4,6 +4,7 @@ import { io } from 'socket.io-client';
 import useAuthStore from '../store/authStore';
 import useGameStore from '../store/gameStore';
 import toast from 'react-hot-toast';
+import { playAnnouncer } from '../api/speech';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
@@ -108,6 +109,7 @@ export const useSocket = () => {
       setMapDimensions(mapWidth, mapHeight, mapUrl, mapTheme);
       setMatchCountdown(0); // clear any remaining countdown
       toast.success('⚔️ Battle started!', { duration: 2000 });
+      playAnnouncer('Battle Started!');
     });
 
     socket.on('match_ended', (data) => {
@@ -134,6 +136,13 @@ export const useSocket = () => {
     // Kill events → kill feed
     socket.on('player_died', ({ killerNickname, targetNickname }) => {
       addKillFeed({ killer: killerNickname, victim: targetNickname });
+      
+      const myNickname = useAuthStore.getState().user?.nickname;
+      if (myNickname === killerNickname) {
+        playAnnouncer('Enemy Slain!');
+      } else if (myNickname === targetNickname) {
+        playAnnouncer('You have been defeated!');
+      }
     });
 
     // Particles optimizations
