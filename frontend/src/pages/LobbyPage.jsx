@@ -87,10 +87,10 @@ export default function LobbyPage() {
         }, 100);
       };
 
-      const handleMatchFound = ({ roomId, roomCode }) => {
+      const handleMatchFound = ({ roomId, roomCode, roomName }) => {
         setIsFindingMatch(false);
         toast.success('Match Found! Entering arena...');
-        handleJoinRoom({ id: roomId, code: roomCode });
+        handleJoinRoom({ id: roomId, code: roomCode, name: roomName });
       };
 
       const handleQueueUpdate = (data) => {

@@ -47,12 +47,14 @@ export default function MobileControls({ joystickRef, onAttack }) {
     // Normalize to [-1, 1] with deadzone
     if (joystickRef) {
       const ratio = dist / maxRadius;
+      const boosting = joystickRef.current?.boosting || false;
       if (ratio < 0.08) {
-        joystickRef.current = { dx: 0, dy: 0 };
+        joystickRef.current = { dx: 0, dy: 0, boosting };
       } else {
         joystickRef.current = {
           dx: dx / maxRadius,
           dy: dy / maxRadius,
+          boosting
         };
       }
     }
@@ -62,7 +64,7 @@ export default function MobileControls({ joystickRef, onAttack }) {
     activePointerIdRef.current = null;
     setKnobPos({ x: 0, y: 0 });
     if (joystickRef) {
-      joystickRef.current = { dx: 0, dy: 0 };
+      joystickRef.current = { dx: 0, dy: 0, boosting: joystickRef.current?.boosting || false };
     }
   }, [joystickRef]);
 
@@ -114,6 +116,26 @@ export default function MobileControls({ joystickRef, onAttack }) {
     setIsAttacking(false);
   };
 
+  const [isBoosting, setIsBoosting] = useState(false);
+  
+  const handleBoostStart = (e) => {
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    setIsBoosting(true);
+    if (joystickRef && joystickRef.current) {
+      joystickRef.current.boosting = true;
+    }
+  };
+
+  const handleBoostEnd = (e) => {
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    setIsBoosting(false);
+    if (joystickRef && joystickRef.current) {
+      joystickRef.current.boosting = false;
+    }
+  };
+
   if (!isTouchDevice) return null;
 
   return (
@@ -145,8 +167,23 @@ export default function MobileControls({ joystickRef, onAttack }) {
         </div>
       </div>
 
-      {/* Attack Button (Bottom-Right) */}
-      <div className="attack-btn-zone" style={{ pointerEvents: 'auto', touchAction: 'none' }}>
+      {/* Action Buttons (Bottom-Right) */}
+      <div className="action-btn-zone" style={{ position: 'absolute', bottom: 40, right: 40, display: 'flex', gap: 20, pointerEvents: 'auto', touchAction: 'none' }}>
+        
+        {/* Boost Button */}
+        <button
+          className={`attack-btn ${isBoosting ? 'active' : ''}`}
+          style={{ width: 64, height: 64, background: isBoosting ? 'var(--accent-gold)' : 'var(--bg-secondary)', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)', opacity: 0.8 }}
+          onPointerDown={handleBoostStart}
+          onPointerUp={handleBoostEnd}
+          onPointerCancel={handleBoostEnd}
+          aria-label="Boost"
+        >
+          <span style={{ fontSize: '1.4rem' }}>⚡</span>
+          <div style={{ fontSize: '0.55rem', fontWeight: 800, marginTop: -2 }}>DASH</div>
+        </button>
+
+        {/* Attack Button */}
         <button
           className={`attack-btn ${isAttacking ? 'active' : ''}`}
           onPointerDown={handleAttackStart}

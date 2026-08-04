@@ -9,6 +9,7 @@ import { playAnnouncer } from '../api/speech';
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
 let socketInstance = null;
+let localKillStreak = 0; // Tracks consecutive kills without dying
 
 // Shared pending join state — survives StrictMode double-effect
 let pendingJoin = null; // { roomId, roomCode, password }
@@ -108,6 +109,7 @@ export const useSocket = () => {
       setMatchId(matchId);
       setMapDimensions(mapWidth, mapHeight, mapUrl, mapTheme);
       setMatchCountdown(0); // clear any remaining countdown
+      localKillStreak = 0; // Reset kill streak at the start of match
       toast.success('⚔️ Battle started!', { duration: 2000 });
       playAnnouncer('Battle Started!');
     });
@@ -140,8 +142,20 @@ export const useSocket = () => {
       const myNickname = useAuthStore.getState().player?.nickname;
       
       if (myNickname === killerNickname) {
-        playAnnouncer('Enemy Slain!');
+        localKillStreak += 1;
+        if (localKillStreak === 2) {
+          playAnnouncer('Double Kill!');
+        } else if (localKillStreak === 3) {
+          playAnnouncer('Triple Kill!');
+        } else if (localKillStreak === 4) {
+          playAnnouncer('Quadra Kill!');
+        } else if (localKillStreak >= 5) {
+          playAnnouncer('Penta Kill! Rampage!');
+        } else {
+          playAnnouncer('Enemy Slain!');
+        }
       } else if (myNickname === targetNickname) {
+        localKillStreak = 0;
         playAnnouncer('You have been defeated!');
       }
     });
