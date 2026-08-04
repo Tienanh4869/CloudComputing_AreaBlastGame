@@ -216,7 +216,9 @@ class GameRoom {
         Math.pow(attacker.x - target.x, 2) + Math.pow(attacker.y - target.y, 2)
       );
 
-      const dynamicAttackRange = 50 + (attacker.level - 1) * 5;
+      // Dynamic attack range based on level (increases range)
+      // Level 1 = 50, Level 10 = 122, Level 20 = 202
+      const dynamicAttackRange = 50 + (attacker.level - 1) * 8;
 
       if (dist <= dynamicAttackRange) {
         // Check line of sight (cover/hiding)
@@ -346,8 +348,8 @@ class GameRoom {
       // 2. Smooth movement with separate X/Y slide against obstacles
       if (player.dx !== 0 || player.dy !== 0) {
         // Calculate speed dynamically
-        // Reduce base speed by 15% (multiplier 0.85)
-        let speedMultiplier = Math.max(0.6, 1 - (player.level * 0.005)) * 0.85;
+        // Reduce base speed further for better control (multiplier 0.75 instead of 0.85)
+        let speedMultiplier = Math.max(0.6, 1 - (player.level * 0.005)) * 0.75;
         if (player.isBoosting) speedMultiplier *= 1.4;
         const currentSpeed = GAME.playerSpeed * speedMultiplier;
 
