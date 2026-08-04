@@ -244,7 +244,7 @@ const initSocket = (io) => {
     });
 
     // ── player_move: Handle movement input ──────────────────────
-    socket.on('player_move', ({ dx, dy }) => {
+    socket.on('player_move', ({ dx, dy, boosting }) => {
       const roomId = socket.currentRoomId;
       if (!roomId) {
         logger.warn(`[Socket] player_move ignored: no currentRoomId for socket ${socket.id}`);
@@ -260,8 +260,9 @@ const initSocket = (io) => {
       // cdx and cdy must be between -1 and 1.
       const cdx = Math.max(-1, Math.min(1, Number(dx) || 0));
       const cdy = Math.max(-1, Math.min(1, Number(dy) || 0));
+      const isBoosting = Boolean(boosting);
 
-      gameRoom.setPlayerMovement(socket.id, cdx, cdy);
+      gameRoom.setPlayerMovement(socket.id, cdx, cdy, isBoosting);
     });
 
     // ── player_attack: Handle attack input ──────────────────────

@@ -197,8 +197,8 @@ export const useSocket = () => {
     socketRef.current?.emit('ready');
   }, []);
 
-  const sendMove = useCallback((dx, dy) => {
-    socketRef.current?.emit('player_move', { dx, dy });
+  const sendMove = useCallback((dx, dy, boosting = false) => {
+    socketRef.current?.emit('player_move', { dx, dy, boosting });
   }, []);
 
   const sendAttack = useCallback(() => {

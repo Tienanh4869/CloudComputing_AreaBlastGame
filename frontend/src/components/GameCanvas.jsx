@@ -32,7 +32,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
   // ── Input Handling & Continuous Steering ───────────────────
   const headingRef = useRef({ dx: 1, dy: 0 }); // Continuous gliding heading
   const mousePosRef = useRef({ x: 0, y: 0, active: false });
-  const lastMoveRef = useRef({ dx: 0, dy: 0, lastSent: 0 });
+  const lastMoveRef = useRef({ dx: 0, dy: 0, isBoosting: false, lastSent: 0 });
+  const isBoostingRef = useRef(false);
 
   const handleKeyDown = useCallback((e) => {
     keysRef.current.add(e.code);
@@ -40,10 +41,16 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       e.preventDefault();
       onAttack?.();
     }
+    if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+      isBoostingRef.current = true;
+    }
   }, [onAttack]);
 
   const handleKeyUp = useCallback((e) => {
     keysRef.current.delete(e.code);
+    if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+      isBoostingRef.current = false;
+    }
   }, []);
 
   const handleMouseMove = useCallback((e) => {
@@ -64,8 +71,16 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
   const handleCanvasClick = useCallback((e) => {
     if (e.button === 0) { // Left click
       onAttack?.();
+    } else if (e.button === 2) { // Right click
+      isBoostingRef.current = true;
     }
   }, [onAttack]);
+
+  const handleMouseUp = useCallback((e) => {
+    if (e.button === 2) { // Right click release
+      isBoostingRef.current = false;
+    }
+  }, []);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -141,14 +156,14 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       }
 
       const now = performance.now();
-      const moved = Math.abs(dx - lastMoveRef.current.dx) > 0.02 || Math.abs(dy - lastMoveRef.current.dy) > 0.02;
+      const moved = Math.abs(dx - lastMoveRef.current.dx) > 0.02 || Math.abs(dy - lastMoveRef.current.dy) > 0.02 || isBoostingRef.current !== lastMoveRef.current.isBoosting;
       const isMoving = Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01;
-      const shouldResend = isMoving && (now - lastMoveRef.current.lastSent > 120);
+      const shouldResend = (isMoving || isBoostingRef.current) && (now - lastMoveRef.current.lastSent > 120);
 
       // Send movement heading to server
       if (moved || shouldResend) {
-        lastMoveRef.current = { dx, dy, lastSent: now };
-        onMove?.(dx, dy);
+        lastMoveRef.current = { dx, dy, isBoosting: isBoostingRef.current, lastSent: now };
+        onMove?.(dx, dy, isBoostingRef.current);
       }
 
       // Render frame
@@ -210,11 +225,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     // Find local player to center camera
     const myPlayer = players.find((p) => p.socketId === mySocketId);
 
-    // Base zoom: show much more of the map (like EvoWars)
-    // As player levels up, zoom out slightly more
-    const baseScale = 0.6; 
-    const playerLevel = myPlayer ? myPlayer.level : 1;
-    const scale = Math.max(0.15, baseScale - (playerLevel * 0.015));
+    // Fixed camera zoom. No zooming in/out based on level!
+    const scale = 0.55;
 
     // World visible area based on scale
     const viewW = W / scale;
@@ -447,7 +459,11 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
   }
 
   function drawPlayer(ctx, player, isMe, slashes) {
-    const radius = player.radius || PLAYER_RADIUS;
+    // player.scale is provided by server: Math.min(1 + level * 0.04, 2.0)
+    const visualScale = player.scale || 1.0;
+    // Base visual radius is 32 (from 64x64 sprite)
+    const visualRadius = 32 * visualScale;
+    const hitRadius = player.radius || PLAYER_RADIUS; // 20px collision box
 
     if (!player.alive || player.respawning) {
       // Ghost / Respawning indicator
@@ -455,13 +471,27 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       ctx.globalAlpha = 0.35;
       ctx.fillStyle = player.color || '#888';
       ctx.beginPath();
-      ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
+      ctx.arc(player.x, player.y, visualRadius, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
       return;
     }
 
     ctx.save();
+    
+    // Boost Trail (Sprint effect)
+    if (player.isBoosting) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+      ctx.shadowColor = 'cyan';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      // Draw a trail slightly behind the player
+      ctx.arc(player.x - player.facingX * 20, player.y - player.facingY * 20, visualRadius * 0.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     if (player.inBushId !== null && player.inBushId !== undefined) {
       ctx.globalAlpha = 0.5;
     }
@@ -470,7 +500,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     if (isMe) {
       ctx.fillStyle = 'rgba(108, 99, 255, 0.25)';
       ctx.beginPath();
-      ctx.arc(player.x, player.y, radius + 7, 0, Math.PI * 2);
+      ctx.arc(player.x, player.y, visualRadius + 7, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -479,33 +509,33 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
       ctx.save();
       ctx.beginPath();
-      ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
+      ctx.arc(player.x, player.y, visualRadius, 0, Math.PI * 2);
       ctx.clip();
-      ctx.drawImage(avatarImg, player.x - radius, player.y - radius, radius * 2, radius * 2);
+      ctx.drawImage(avatarImg, player.x - visualRadius, player.y - visualRadius, visualRadius * 2, visualRadius * 2);
       ctx.restore();
 
       ctx.strokeStyle = isMe ? '#FFFFFF' : 'rgba(255,255,255,0.5)';
       ctx.lineWidth = isMe ? 2.5 : 1.5;
       ctx.beginPath();
-      ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
+      ctx.arc(player.x, player.y, visualRadius, 0, Math.PI * 2);
       ctx.stroke();
     } else {
       ctx.fillStyle = player.color || '#4A90D9';
       ctx.beginPath();
-      ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
+      ctx.arc(player.x, player.y, visualRadius, 0, Math.PI * 2);
       ctx.fill();
 
       // Eye / Pupil
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.beginPath();
-      ctx.arc(player.x - radius * 0.25, player.y - radius * 0.25, radius * 0.4, 0, Math.PI * 2);
+      ctx.arc(player.x - visualRadius * 0.25, player.y - visualRadius * 0.25, visualRadius * 0.4, 0, Math.PI * 2);
       ctx.fill();
 
       // Border
       ctx.strokeStyle = isMe ? '#FFFFFF' : 'rgba(255,255,255,0.5)';
       ctx.lineWidth = isMe ? 2.5 : 1.5;
       ctx.beginPath();
-      ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
+      ctx.arc(player.x, player.y, visualRadius, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.restore();
@@ -527,15 +557,20 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       ctx.save();
       ctx.translate(player.x, player.y);
       ctx.rotate(angle);
-      const weaponSize = radius * 1.5;
-      ctx.drawImage(weaponImg, radius - 4, -weaponSize / 2, weaponSize, weaponSize);
+      
+      // Dynamic weapon size based on level (same as backend attackRange)
+      const dynamicAttackRange = 50 + ((player.level || 1) - 1) * 5; 
+      const weaponSize = dynamicAttackRange * 0.8; // Scale weapon image to fit range
+      
+      // Draw weapon offset slightly from body
+      ctx.drawImage(weaponImg, visualRadius * 0.8, -weaponSize / 2, weaponSize, weaponSize);
       ctx.restore();
     }
 
     // XP Bar
     const xpRatio = Math.max(0, Math.min(1, (player.xp || 0) / (player.maxXp || 10)));
     const barX = player.x - HP_BAR_W / 2;
-    const barY = player.y - radius - 12;
+    const barY = player.y - visualRadius - 12;
 
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(barX, barY, HP_BAR_W, HP_BAR_H);
@@ -550,13 +585,13 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     ctx.fillText(
       (player.nickname?.length > 10 ? player.nickname.slice(0, 10) + '…' : player.nickname) || '?',
       player.x,
-      player.y - radius - 16
+      player.y - visualRadius - 16
     );
 
     // Player Level
     ctx.font = `bold 12px sans-serif`;
     ctx.fillStyle = '#FFD700';
-    ctx.fillText(`Lv ${player.level || 1}`, player.x, player.y + radius + 16);
+    ctx.fillText(`Lv ${player.level || 1}`, player.x, player.y + visualRadius + 16);
   }
 
   function roundRectPath(ctx, x, y, w, h, r) {
@@ -577,6 +612,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onMouseDown={handleCanvasClick}
+      onMouseUp={handleMouseUp}
+      onContextMenu={(e) => e.preventDefault()}
       style={{
         display: 'block',
         width: '100%',
