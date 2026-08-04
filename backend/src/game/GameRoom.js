@@ -74,7 +74,7 @@ class GameRoom {
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
-    const totalParticles = 6000; // High particle count for EvoWars density on massive map
+    const totalParticles = 1000; // Reasonable particle count for 3500x3500 map
     while (this.particles.size < totalParticles) {
       this._addParticle();
     }
@@ -450,57 +450,106 @@ class GameRoom {
     return { collected, spawned };
   }
 
-  // ── State Snapshot ───────────────────────────────────────────
-
+  // ── State Snapshot (Legacy, replaced by Array Loops) ────────
+  // We keep this for `room_joined` payload so they get the initial state
   getState() {
-    // Fallback for logic that doesn't need per-player fog of war
     return this.getStateFor(null);
   }
 
   getStateFor(viewerSocketId) {
-    const viewer = viewerSocketId ? this.players.get(viewerSocketId) : null;
-    
     const now = Date.now();
-
-    const playersArray = Array.from(this.players.values())
-      .filter(p => {
-        if (!viewer) return true;
-        // Send all players, let client do frustum culling
-        return true;
-      })
-      .map((p) => ({
-        socketId: p.socketId,
-        playerId: p.playerId,
-        nickname: p.nickname,
-        color: p.color,
-        x: Math.round(p.x),
-        y: Math.round(p.y),
-        level: p.level,
-        xp: p.xp,
-        maxXp: p.maxXp,
-        alive: p.alive,
-        respawning: p.respawning,
-        respawnTimer: p.respawnTimer,
-        facingX: p.facingX,
-        facingY: p.facingY,
-        isBoosting: p.isBoosting,
-        scale: Math.min(1 + p.level * 0.04, 2.0),
-        avatarUrl: p.avatarUrl,
-        weaponUrl: p.weaponUrl,
-        radius: p.radius,
-        inBushId: p.inBushId,
-      }));
+    const playersArray = Array.from(this.players.values()).map((p) => ({
+      socketId: p.socketId,
+      playerId: p.playerId,
+      nickname: p.nickname,
+      color: p.color,
+      x: Math.round(p.x),
+      y: Math.round(p.y),
+      level: p.level,
+      xp: p.xp,
+      maxXp: p.maxXp,
+      alive: p.alive,
+      respawning: p.respawning,
+      facingX: p.facingX,
+      facingY: p.facingY,
+      isBoosting: p.isBoosting,
+      scale: Math.min(1 + p.level * 0.04, 2.0),
+      avatarUrl: p.avatarUrl,
+      weaponUrl: p.weaponUrl,
+      radius: p.radius,
+    }));
 
     return {
       roomId: this.roomId,
       mapUrl: this.mapConfig.url,
       mapTheme: this.mapConfig.theme,
       players: playersArray,
-      particles: [], // Omitted to save bandwidth, sent via sync_particles
+      particles: [], // Omitted to save bandwidth
       startTime: this.startedAt,
       matchDuration: this.matchDuration,
       timestamp: now,
     };
+  }
+
+  // ── Broadcast Loops (Spatial Partitioning & Array Compression) ──
+
+  _broadcastCombatTick(io) {
+    // 1. Group players into their Grid Cells
+    const { getCell } = require('./GridManager');
+    const cellsData = {};
+    
+    for (const p of this.players.values()) {
+      if (!p.alive && !p.respawning) continue;
+      
+      const cellId = getCell(p.x, p.y).id;
+      if (!cellsData[cellId]) cellsData[cellId] = [];
+      
+      // Pack Data: [socketId (substring for size?), x, y, angle, state, scale]
+      // Since socketId is string, we'll keep it but array is smaller than object
+      // state: 0=idle, 1=moving, 2=attacking, 3=boosting
+      let state = 0;
+      if (p.isBoosting) state = 3;
+      else if (p.isAttacking) state = 2; // Assuming we add this flag during attack
+      else if (p.dx || p.dy) state = 1;
+      
+      const angle = Math.atan2(p.facingY || 0, p.facingX || 1);
+      const scale = Math.min(1 + p.level * 0.04, 2.0);
+
+      cellsData[cellId].push([
+        p.socketId,
+        Math.round(p.x),
+        Math.round(p.y),
+        Math.round(angle * 100) / 100, // compressed float
+        state,
+        Math.round(scale * 100) / 100,
+      ]);
+    }
+
+    // 2. Broadcast to each grid room
+    for (const [cellId, data] of Object.entries(cellsData)) {
+      io.to(`room_${this.roomId}_grid_${cellId}`).emit('u', data); // 'u' = update
+    }
+  }
+
+  _broadcastSlowData(io) {
+    // Top 10 Leaderboard
+    const top10 = Array.from(this.players.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map(p => [p.nickname, p.score, p.kills]);
+
+    // Minimap relative dots
+    const mapW = this.mapConfig.width;
+    const mapH = this.mapConfig.height;
+    const minimapDots = Array.from(this.players.values())
+      .filter(p => p.alive)
+      .map(p => [
+        p.socketId,
+        Math.round((p.x / mapW) * 100), // % X
+        Math.round((p.y / mapH) * 100), // % Y
+      ]);
+
+    io.to(String(this.roomId)).emit('slow_sync', { top: top10, map: minimapDots });
   }
 
   // ── Start / Stop ─────────────────────────────────────────────

@@ -266,6 +266,15 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     // Smooth camera with integer snap to prevent sub-pixel jitter
     let targetCamX = myLerpedPlayer ? myLerpedPlayer.x - viewW / 2 : mapWidth / 2 - viewW / 2;
     let targetCamY = myLerpedPlayer ? myLerpedPlayer.y - viewH / 2 : mapHeight / 2 - viewH / 2;
+    
+    // Clamp camera to map boundaries so we don't see the dark void outside the map
+    if (viewW < mapWidth) {
+      targetCamX = Math.max(0, Math.min(targetCamX, mapWidth - viewW));
+    }
+    if (viewH < mapHeight) {
+      targetCamY = Math.max(0, Math.min(targetCamY, mapHeight - viewH));
+    }
+
     const camX = Math.round(targetCamX);
     const camY = Math.round(targetCamY);
     // ---------------------------------------
