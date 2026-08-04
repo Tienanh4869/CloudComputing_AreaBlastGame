@@ -74,7 +74,7 @@ class GameRoom {
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
-    const totalParticles = 1000; // Reasonable particle count for 3500x3500 map
+    const totalParticles = 75; // Reduced by half
     while (this.particles.size < totalParticles) {
       this._addParticle();
     }
@@ -346,9 +346,8 @@ class GameRoom {
       // 2. Smooth movement with separate X/Y slide against obstacles
       if (player.dx !== 0 || player.dy !== 0) {
         // Calculate speed dynamically
-        // Speed drops slowly per level: Base * (1 - 0.005 * level)
-        // Boost adds 40%
-        let speedMultiplier = Math.max(0.6, 1 - (player.level * 0.005));
+        // Reduce base speed by 15% (multiplier 0.85)
+        let speedMultiplier = Math.max(0.6, 1 - (player.level * 0.005)) * 0.85;
         if (player.isBoosting) speedMultiplier *= 1.4;
         const currentSpeed = GAME.playerSpeed * speedMultiplier;
 

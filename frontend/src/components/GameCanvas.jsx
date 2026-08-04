@@ -356,9 +356,10 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     // 8. Players
     for (let i = 0; i < lerpedPlayers.length; i++) {
       const pl = lerpedPlayers[i];
-      // Frustum culling
-      const pRad = (pl.radius || PLAYER_RADIUS) * 2;
-      if (pl.x < camX - pRad || pl.x > camX + viewW + pRad || pl.y < camY - pRad || pl.y > camY + viewH + pRad) continue;
+      // Frustum culling (account for player scale!)
+      const plScale = pl.scale || 1.0;
+      const visualRadius = (64 * plScale) / 2; // Base sprite is 64x64
+      if (pl.x < camX - visualRadius || pl.x > camX + viewW + visualRadius || pl.y < camY - visualRadius || pl.y > camY + viewH + visualRadius) continue;
       drawPlayer(ctx, pl, pl.socketId === mySocketId, slashes);
     }
 
