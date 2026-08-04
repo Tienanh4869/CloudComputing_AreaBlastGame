@@ -134,13 +134,13 @@ export const useSocket = () => {
     });
 
     // Kill events → kill feed
-    socket.on('player_died', ({ killerNickname, targetNickname }) => {
+    socket.on('player_died', ({ killerNickname, targetNickname, killerSocketId, targetSocketId }) => {
       addKillFeed({ killer: killerNickname, victim: targetNickname });
       
-      const myNickname = useAuthStore.getState().user?.nickname;
-      if (myNickname === killerNickname) {
+      const myId = socket.id;
+      if (myId === killerSocketId) {
         playAnnouncer('Enemy Slain!');
-      } else if (myNickname === targetNickname) {
+      } else if (myId === targetSocketId) {
         playAnnouncer('You have been defeated!');
       }
     });
