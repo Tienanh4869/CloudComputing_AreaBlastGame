@@ -74,7 +74,7 @@ class GameRoom {
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
-    const totalParticles = GAME.particleCount * 25; // Massive particles for 8000x8000 map
+    const totalParticles = 400; // Extremely sparse particles for 16000x16000 map
     while (this.particles.size < totalParticles) {
       this._addParticle();
     }
@@ -410,10 +410,8 @@ class GameRoom {
             score: player.score,
           });
 
-          // Spawn replacement
-          setTimeout(() => {
-            if (this.isRunning) this._addParticle();
-          }, 2000);
+          // Spawn replacement instantly
+          if (this.isRunning) this._addParticle();
           break;
         }
       }
