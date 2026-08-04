@@ -52,7 +52,7 @@ const config = {
     mapWidth: parseInt(process.env.MAP_WIDTH) || 1200,
     mapHeight: parseInt(process.env.MAP_HEIGHT) || 800,
     particleCount: parseInt(process.env.PARTICLE_COUNT) || 30,
-    playerSpeed: parseFloat(process.env.PLAYER_SPEED) || 2,
+    playerSpeed: parseFloat(process.env.PLAYER_SPEED) || 5,
     playerHp: parseInt(process.env.PLAYER_HP) || 100,
     attackDamage: parseInt(process.env.ATTACK_DAMAGE) || 25,
     attackRange: parseInt(process.env.ATTACK_RANGE) || 60,

@@ -74,7 +74,7 @@ class GameRoom {
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
-    const totalParticles = 3500; // High particle count for EvoWars density on massive map
+    const totalParticles = 6000; // High particle count for EvoWars density on massive map
     while (this.particles.size < totalParticles) {
       this._addParticle();
     }
