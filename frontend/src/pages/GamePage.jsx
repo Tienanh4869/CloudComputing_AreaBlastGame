@@ -13,8 +13,9 @@ export default function GamePage() {
   const { player } = useAuthStore();
   const matchStatus = useGameStore((s) => s.matchStatus);
   const matchCountdown = useGameStore((s) => s.matchCountdown);
-  const myHp = useGameStore((s) => s.myHp);
-  const myMaxHp = useGameStore((s) => s.myMaxHp);
+  const myLevel = useGameStore((s) => s.myLevel);
+  const myXp = useGameStore((s) => s.myXp);
+  const myMaxXp = useGameStore((s) => s.myMaxXp);
   const myScore = useGameStore((s) => s.myScore);
   const myKills = useGameStore((s) => s.myKills);
   const myAlive = useGameStore((s) => s.myAlive);
@@ -78,8 +79,7 @@ export default function GamePage() {
     navigate('/lobby');
   };
 
-  const hpPercent = myMaxHp > 0 ? (myHp / myMaxHp) * 100 : 100;
-  const hpClass = hpPercent > 50 ? '' : hpPercent > 25 ? 'low' : 'critical';
+  const xpPercent = myMaxXp > 0 ? (myXp / myMaxXp) * 100 : 0;
 
   const liveRankings = matchLeaderboard.length > 0
     ? matchLeaderboard
@@ -163,20 +163,12 @@ export default function GamePage() {
           />
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div className="hp-bar-bg" style={{ width: 'clamp(70px, 15vw, 120px)' }}>
-                <div className={`hp-bar-fill ${hpClass}`} style={{ width: `${hpPercent}%` }} />
+              <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--accent-gold)' }}>
+                Lv {myLevel}
               </div>
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--text-secondary)',
-                  fontFamily: 'var(--font-mono)',
-                  minWidth: 28,
-                  fontWeight: 600,
-                }}
-              >
-                {myHp}
-              </span>
+              <div className="hp-bar-bg" style={{ width: 'clamp(70px, 15vw, 120px)', background: 'rgba(0,0,0,0.5)' }}>
+                <div style={{ width: `${xpPercent}%`, height: '100%', background: 'linear-gradient(90deg, #4A90D9, #00d2ff)', borderRadius: 2 }} />
+              </div>
             </div>
           </div>
 

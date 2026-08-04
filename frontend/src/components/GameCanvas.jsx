@@ -420,18 +420,18 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       ctx.restore();
     }
 
-    // HP Bar
-    const hpRatio = Math.max(0, Math.min(1, player.hp / player.maxHp));
+    // XP Bar
+    const xpRatio = Math.max(0, Math.min(1, (player.xp || 0) / (player.maxXp || 10)));
     const barX = player.x - HP_BAR_W / 2;
     const barY = player.y - radius - 12;
 
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(barX, barY, HP_BAR_W, HP_BAR_H);
 
-    ctx.fillStyle = hpRatio > 0.5 ? '#2ED573' : hpRatio > 0.25 ? '#FFA502' : '#FF4757';
-    ctx.fillRect(barX, barY, HP_BAR_W * hpRatio, HP_BAR_H);
+    ctx.fillStyle = '#00d2ff'; // XP Color
+    ctx.fillRect(barX, barY, HP_BAR_W * xpRatio, HP_BAR_H);
 
-    // Player Nickname & Score
+    // Player Nickname
     ctx.font = `bold 11px sans-serif`;
     ctx.textAlign = 'center';
     ctx.fillStyle = isMe ? '#FFFFFF' : '#DDDDDD';
@@ -441,9 +441,10 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       player.y - radius - 16
     );
 
-    ctx.font = `bold 10px monospace`;
+    // Player Level
+    ctx.font = `bold 12px sans-serif`;
     ctx.fillStyle = '#FFD700';
-    ctx.fillText(`${player.score || 0}`, player.x, player.y + radius + 14);
+    ctx.fillText(`Lv ${player.level || 1}`, player.x, player.y + radius + 16);
   }
 
   function roundRectPath(ctx, x, y, w, h, r) {
