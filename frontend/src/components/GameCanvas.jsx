@@ -295,8 +295,8 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     ctx.restore();
 
     // 3. Map border (dãy phân cách cho pit)
-    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(108,99,255,0.8)';
-    ctx.lineWidth = 12;
+    ctx.strokeStyle = '#FF5A1F'; // EvoWars style orange border
+    ctx.lineWidth = 10;
     ctx.strokeRect(0, 0, mapWidth, mapHeight);
     
     // Inner boundary warning
@@ -387,7 +387,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
   // ── Minimap ────────────────────────────────────────────────
   function drawMinimap(ctx, viewW, viewH, mapW, mapH, players, me, camX, camY) {
     const W = ctx.canvas.width;
-    const size = Math.min(150, W * 0.22); // Size of minimap
+    const size = Math.min(140, W * 0.22); // Size of minimap (Square 140x140)
     const padding = 16;
     const mx = padding; // Top-Left X
     const my = padding; // Top-Left Y
@@ -396,32 +396,38 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
 
     // Minimap Background
     ctx.save();
-    ctx.globalAlpha = 0.75;
-    ctx.fillStyle = '#080c18';
-    ctx.beginPath();
-    ctx.arc(mx + size / 2, my + size / 2, size / 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(mx, my, size, size);
 
-    // Clip to circle for all minimap content
-    ctx.save();
+    // Clip to square for all minimap content
     ctx.beginPath();
-    ctx.arc(mx + size / 2, my + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.rect(mx, my, size, size);
     ctx.clip();
 
     // Map Border on minimap
-    ctx.strokeStyle = 'rgba(108, 99, 255, 0.4)';
+    ctx.strokeStyle = 'rgba(255, 90, 31, 0.4)'; // match the orange border faintly
     ctx.lineWidth = 1;
     ctx.strokeRect(mx, my, size, size);
+
+    // XP Orbs as yellow dots
+    // Assuming particles are in the store
+    const particles = Array.from(getState().particles.values());
+    ctx.fillStyle = '#FFD700'; // Yellow
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      ctx.beginPath();
+      ctx.arc(mx + p.x * scaleX, my + p.y * scaleY, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // Players as dots
     for (let i = 0; i < players.length; i++) {
       const p = players[i];
       if (!p.alive && !p.respawning) continue;
       const isMe = me && p.socketId === me.socketId;
-      ctx.fillStyle = isMe ? '#FFFFFF' : (p.color || '#FF4757');
+      ctx.fillStyle = isMe ? '#FFFFFF' : '#00A8FF'; // White for me, Blue for others
       ctx.beginPath();
-      ctx.arc(mx + p.x * scaleX, my + p.y * scaleY, isMe ? 3.5 : 2, 0, Math.PI * 2);
+      ctx.arc(mx + p.x * scaleX, my + p.y * scaleY, isMe ? 3.5 : 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -432,14 +438,12 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       ctx.strokeRect(mx + camX * scaleX, my + camY * scaleY, viewW * scaleX, viewH * scaleY);
     }
 
-    ctx.restore(); // End circle clip
+    ctx.restore(); // End clip
 
-    // Minimap border ring
-    ctx.beginPath();
-    ctx.arc(mx + size / 2, my + size / 2, size / 2, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(108, 99, 255, 0.55)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    // Minimap border ring (Square)
+    ctx.strokeStyle = '#5B5BFF';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(mx, my, size, size);
   }
 
   function drawSlash(ctx, slash, age) {
