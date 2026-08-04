@@ -163,6 +163,7 @@ class GameRoom {
       facingX: 1, // default facing right
       facingY: 0,
       isBoosting: false,
+      inBushId: null,
     };
     this.players.set(socketId, player);
     logger.gameEvent('player_joined', { roomId: this.roomId, nickname: playerData.nickname, x: pos.x, y: pos.y });
@@ -264,7 +265,7 @@ class GameRoom {
           target.xp = 0;
           target.maxXp = 10 * Math.pow(1.5, target.level - 1);
 
-        hits.push({ targetSocketId: sid, target, killed: target.hp <= 0, event });
+        hits.push({ targetSocketId: sid, target, killed: true, event });
       }
     }
 

@@ -156,12 +156,29 @@ const initSocket = (io) => {
 
         socket.isHost = (room.created_by === socket.userId);
 
+        const newPlayer = gameRoom.players.get(socket.id);
         // Notify everyone in the room
         io.to(String(roomId)).emit('player_joined', {
-          socketId: socket.id,
-          playerId: socket.playerId,
-          nickname: socket.nickname,
-          color: socket.avatarColor,
+          socketId: newPlayer.socketId,
+          playerId: newPlayer.playerId,
+          nickname: newPlayer.nickname,
+          color: newPlayer.color,
+          x: newPlayer.x,
+          y: newPlayer.y,
+          level: newPlayer.level,
+          xp: newPlayer.xp,
+          maxXp: newPlayer.maxXp,
+          alive: newPlayer.alive,
+          respawning: newPlayer.respawning,
+          facingX: newPlayer.facingX,
+          facingY: newPlayer.facingY,
+          isBoosting: newPlayer.isBoosting,
+          scale: Math.min(1 + newPlayer.level * 0.04, 2.0),
+          avatarUrl: newPlayer.avatarUrl,
+          weaponUrl: newPlayer.weaponUrl,
+          radius: newPlayer.radius,
+          score: newPlayer.score,
+          kills: newPlayer.kills,
           playerCount: gameRoom.getPlayerCount(),
           isHost: socket.isHost,
         });
