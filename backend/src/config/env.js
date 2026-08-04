@@ -87,6 +87,8 @@ const config = {
 
   AZURE_SPEECH_KEY: process.env.AZURE_SPEECH_KEY || '',
   AZURE_SPEECH_REGION: process.env.AZURE_SPEECH_REGION || '',
+
+  AZURE_MAPS_KEY: process.env.AZURE_MAPS_KEY || '',
 };
 
 config.loadKeyVaultSecrets = async () => {
@@ -171,6 +173,12 @@ config.loadKeyVaultSecrets = async () => {
     if (speechRegionSecret && speechRegionSecret.value) {
       config.AZURE_SPEECH_REGION = speechRegionSecret.value;
       console.log('[KeyVault] Successfully loaded AZURE-SPEECH-REGION');
+    }
+
+    const mapsKeySecret = await client.getSecret('AZURE-MAPS-KEY').catch(() => null);
+    if (mapsKeySecret && mapsKeySecret.value) {
+      config.AZURE_MAPS_KEY = mapsKeySecret.value;
+      console.log('[KeyVault] Successfully loaded AZURE-MAPS-KEY');
     }
     
   } catch (err) {

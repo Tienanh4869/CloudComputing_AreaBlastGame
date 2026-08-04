@@ -245,9 +245,10 @@ class Matchmaker {
 
   static async createMatch(players) {
     try {
+      const region = (players.length > 0 && players[0].region) ? players[0].region : 'UN';
       const code = generateRoomCode();
       const room = await Room.create({
-        name: 'Quick Match ' + Math.floor(Math.random() * 1000),
+        name: `[${region}] Quick Match ` + Math.floor(Math.random() * 1000),
         code,
         max_players: MAX_PLAYERS,
         created_by: players[0].userId || null,
