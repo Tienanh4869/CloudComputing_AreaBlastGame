@@ -175,7 +175,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
-  }, [onMove, joystickRef]);
+  }, [onMove, joystickRef, mapWidth, mapHeight]);
 
   // ── High Performance Optimized Rendering ──────────────────
 
