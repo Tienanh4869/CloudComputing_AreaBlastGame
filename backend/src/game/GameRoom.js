@@ -74,7 +74,7 @@ class GameRoom {
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
-    const totalParticles = 150; // Extremely sparse particles for massive map
+    const totalParticles = 3500; // High particle count for EvoWars density on massive map
     while (this.particles.size < totalParticles) {
       this._addParticle();
     }
@@ -410,7 +410,8 @@ class GameRoom {
             score: player.score,
           });
 
-          // Removed instant respawn so particles stay sparse
+          // Instantly respawn a new particle elsewhere to maintain high density
+          if (this.isRunning) this._addParticle();
           break;
         }
       }
@@ -484,16 +485,6 @@ class GameRoom {
     this.startedAt = Date.now();
     this.matchDuration = 600 * 1000; // 10 minutes
     this.tickCount = 0;
-    
-    // Replenish particles slowly over time to maintain the cap (150) without clustering
-    this.particleInterval = setInterval(() => {
-      if (this.isRunning && this.particles.size < 150) {
-        // Spawn 3 particles per second to slowly refill
-        for (let i = 0; i < 3; i++) {
-          if (this.particles.size < 150) this._addParticle();
-        }
-      }
-    }, 1000);
 
     this._logEvent('match_started', { matchId });
     logger.gameEvent('match_started', { roomId: this.roomId, matchId });
@@ -504,10 +495,6 @@ class GameRoom {
     if (this.tickInterval) {
       clearInterval(this.tickInterval);
       this.tickInterval = null;
-    }
-    if (this.particleInterval) {
-      clearInterval(this.particleInterval);
-      this.particleInterval = null;
     }
     this._logEvent('match_ended', {
       duration: Math.floor((Date.now() - this.startedAt) / 1000),
