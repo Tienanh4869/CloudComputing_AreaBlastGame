@@ -246,8 +246,8 @@ class GameRoom {
           // Drop particles based on victim's score
           this._dropLoot(target.x, target.y, target.score);
           
-          // Reset target score after dropping
-          target.score = 0;
+          // Penalize target score (lose 30%) after dropping
+          target.score = Math.floor(target.score * 0.7);
 
           this._logEvent('player_died', {
             playerId: target.playerId,
@@ -321,7 +321,10 @@ class GameRoom {
       if (player.isBoosting) {
         // ~20 XP per sec (at 30 TPS -> 0.67 XP per tick)
         const xpDrain = 0.67;
+        const scoreDrain = 2; // ~60 points per sec
         player.xp -= xpDrain;
+        player.score = Math.max(0, player.score - scoreDrain);
+
         if (player.xp <= 0) {
           if (player.level > 1) {
             // Drop a level
@@ -478,6 +481,8 @@ class GameRoom {
       avatarUrl: p.avatarUrl,
       weaponUrl: p.weaponUrl,
       radius: p.radius,
+      score: p.score,
+      kills: p.kills,
     }));
 
     return {

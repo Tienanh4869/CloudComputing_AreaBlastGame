@@ -108,8 +108,9 @@ router.get('/', async (req, res, next) => {
           FROM players AS p
           INNER JOIN users AS u
             ON u.id = p.user_id
-          LEFT JOIN totals
+          INNER JOIN totals
             ON totals.player_id = p.id
+          WHERE totals.score > 0
 
           ORDER BY
             score DESC,
@@ -223,8 +224,9 @@ router.get('/', async (req, res, next) => {
           FROM players AS p
           INNER JOIN users AS u
             ON u.id = p.user_id
-          LEFT JOIN totals
+          INNER JOIN totals
             ON totals.player_id = p.id
+          WHERE totals.score > 0
 
           ORDER BY
             score DESC,
