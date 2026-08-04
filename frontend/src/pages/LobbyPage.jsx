@@ -60,16 +60,30 @@ export default function LobbyPage() {
   // Global Chat State
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
-  const chatEndRef = useRef(null);
-  const mobileChatEndRef = useRef(null);
+  const chatMessagesRef = useRef(null);
+  const mobileChatMessagesRef = useRef(null);
 
   useEffect(() => {
     if (socket) {
       const handleGlobalChat = (msg) => {
         setChatMessages((prev) => [...prev, msg].slice(-100)); // keep last 100
         setTimeout(() => {
-          chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-          mobileChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          const desktopChat = chatMessagesRef.current;
+          const mobileChat = mobileChatMessagesRef.current;
+
+          if (desktopChat) {
+            desktopChat.scrollTo({
+              top: desktopChat.scrollHeight,
+              behavior: 'smooth',
+            });
+          }
+
+          if (mobileChat) {
+            mobileChat.scrollTo({
+              top: mobileChat.scrollHeight,
+              behavior: 'smooth',
+            });
+          }
         }, 100);
       };
 
@@ -236,12 +250,29 @@ export default function LobbyPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', paddingTop: 64, display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{
+        height: '100dvh',
+        minHeight: 0,
+        paddingTop: 64,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
       {/* Top Navbar */}
       <Navbar onOpenProfile={() => setShowProfile(true)} />
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          overflow: 'hidden',
+          position: 'relative',
+          minHeight: 0,
+        }}
+      >
         {/* Left Side: Game Menu / Browser */}
         <div
           className="container"
@@ -250,8 +281,10 @@ export default function LobbyPage() {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            padding: '24px 16px 80px',
+            padding: '20px 16px 24px',
             overflowY: 'auto',
+            minHeight: 0,
+            overscrollBehavior: 'contain',
           }}
         >
           {activeTab === 'menu' && (
@@ -481,6 +514,10 @@ export default function LobbyPage() {
             display: 'flex',
             flexDirection: 'column',
             boxShadow: '-4px 0 20px rgba(0,0,0,0.2)',
+            height: '100%',
+            minHeight: 0,
+            overflow: 'hidden',
+            flexShrink: 0,
           }}
         >
           <div
@@ -492,6 +529,7 @@ export default function LobbyPage() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
+              flexShrink: 0,
             }}
           >
             <span>🌎</span>
@@ -499,10 +537,14 @@ export default function LobbyPage() {
           </div>
 
           <div
+            ref={chatMessagesRef}
             style={{
               flex: 1,
+              minHeight: 0,
               padding: 16,
               overflowY: 'auto',
+              overscrollBehavior: 'contain',
+              scrollbarGutter: 'stable',
               display: 'flex',
               flexDirection: 'column',
               gap: 12,
@@ -520,7 +562,6 @@ export default function LobbyPage() {
                 </div>
               ))
             )}
-            <div ref={chatEndRef} />
           </div>
 
           <form
@@ -531,6 +572,7 @@ export default function LobbyPage() {
               display: 'flex',
               gap: 8,
               background: 'var(--bg-card)',
+              flexShrink: 0,
             }}
           >
             <input
@@ -598,10 +640,14 @@ export default function LobbyPage() {
             </div>
 
             <div
+              ref={mobileChatMessagesRef}
               style={{
                 flex: 1,
+                minHeight: 0,
                 padding: 16,
                 overflowY: 'auto',
+                overscrollBehavior: 'contain',
+                scrollbarGutter: 'stable',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 12,
@@ -619,7 +665,6 @@ export default function LobbyPage() {
                   </div>
                 ))
               )}
-              <div ref={mobileChatEndRef} />
             </div>
 
             <form
