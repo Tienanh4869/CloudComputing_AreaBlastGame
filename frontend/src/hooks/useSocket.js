@@ -145,7 +145,8 @@ export const useSocket = () => {
       addParticles(spawned);
     });
 
-    socket.on('particles_collected', (collectedIds) => {
+    socket.on('particles_collected', (collectedData) => {
+      const collectedIds = collectedData.map(c => c.particleId);
       removeParticles(collectedIds);
     });
 
