@@ -220,10 +220,6 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     const viewW = W / scale;
     const viewH = H / scale;
 
-    // Center camera on player using scaled viewport
-    const camX = myPlayer ? myPlayer.x - viewW / 2 : mapWidth / 2 - viewW / 2;
-    const camY = myPlayer ? myPlayer.y - viewH / 2 : mapHeight / 2 - viewH / 2;
-
     // --- LERP PLAYERS TO PREVENT JITTER ---
     const renderPlayers = renderPlayersRef.current;
     const currentIds = new Set(players.map(p => p.socketId));
@@ -251,6 +247,15 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       }
       lerpedPlayers.push({ ...pl, x: rPlayer.x, y: rPlayer.y });
     }
+
+    // Now find the lerped position of the local player to center the camera perfectly smoothly
+    const myLerpedPlayer = lerpedPlayers.find(p => p.socketId === mySocketId);
+    
+    // Smooth camera with integer snap to prevent sub-pixel jitter
+    let targetCamX = myLerpedPlayer ? myLerpedPlayer.x - viewW / 2 : mapWidth / 2 - viewW / 2;
+    let targetCamY = myLerpedPlayer ? myLerpedPlayer.y - viewH / 2 : mapHeight / 2 - viewH / 2;
+    const camX = Math.round(targetCamX);
+    const camY = Math.round(targetCamY);
     // ---------------------------------------
 
     // 1. Background (unscaled to fill screen)
@@ -266,10 +271,15 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     ctx.lineWidth = 1;
     drawHexagonGrid(ctx, camX, camY, viewW, viewH, 60);
 
-    // 3. Map border
-    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(255,100,100,0.8)';
-    ctx.lineWidth = 10;
+    // 3. Map border (dãy phân cách cho pit)
+    ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(108,99,255,0.8)';
+    ctx.lineWidth = 12;
     ctx.strokeRect(0, 0, mapWidth, mapHeight);
+    
+    // Inner boundary warning
+    ctx.strokeStyle = 'rgba(255, 50, 50, 0.4)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(6, 6, mapWidth - 12, mapHeight - 12);
 
     // 4. Obstacles (Walls / Cover) - Fast Direct Geometry
     if (mapTheme?.obstacles && mapTheme.obstacles.length > 0) {
@@ -296,8 +306,6 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
         ctx.stroke();
       }
     }
-
-    // Safe zone removed
 
     // 7. Particles (Collectible Dots) - Highly Optimized Batch Loop
     if (particles.length > 0) {
@@ -326,7 +334,11 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
 
     // 8. Players
     for (let i = 0; i < lerpedPlayers.length; i++) {
-      drawPlayer(ctx, lerpedPlayers[i], lerpedPlayers[i].socketId === mySocketId, slashes);
+      const pl = lerpedPlayers[i];
+      // Frustum culling
+      const pRad = (pl.radius || PLAYER_RADIUS) * 2;
+      if (pl.x < camX - pRad || pl.x > camX + viewW + pRad || pl.y < camY - pRad || pl.y > camY + viewH + pRad) continue;
+      drawPlayer(ctx, pl, pl.socketId === mySocketId, slashes);
     }
 
     // 9. Slashes (Attack Animations)
@@ -341,7 +353,69 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       }
     }
 
-    ctx.restore(); // Restore camera translation
+    ctx.restore(); // End camera translate / scale
+
+    // 9. Minimap (Top-Left corner)
+    drawMinimap(ctx, viewW, viewH, mapWidth, mapHeight, lerpedPlayers, myLerpedPlayer, camX, camY);
+
+  } // End of render
+
+  // ── Minimap ────────────────────────────────────────────────
+  function drawMinimap(ctx, viewW, viewH, mapW, mapH, players, me, camX, camY) {
+    const W = ctx.canvas.width;
+    const size = Math.min(150, W * 0.22); // Size of minimap
+    const padding = 16;
+    const mx = padding; // Top-Left X
+    const my = padding; // Top-Left Y
+    const scaleX = size / mapW;
+    const scaleY = size / mapH;
+
+    // Minimap Background
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = '#080c18';
+    ctx.beginPath();
+    ctx.arc(mx + size / 2, my + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Clip to circle for all minimap content
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(mx + size / 2, my + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Map Border on minimap
+    ctx.strokeStyle = 'rgba(108, 99, 255, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mx, my, size, size);
+
+    // Players as dots
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!p.alive && !p.respawning) continue;
+      const isMe = me && p.socketId === me.socketId;
+      ctx.fillStyle = isMe ? '#FFFFFF' : (p.color || '#FF4757');
+      ctx.beginPath();
+      ctx.arc(mx + p.x * scaleX, my + p.y * scaleY, isMe ? 3.5 : 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Viewport rectangle
+    if (me) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(mx + camX * scaleX, my + camY * scaleY, viewW * scaleX, viewH * scaleY);
+    }
+
+    ctx.restore(); // End circle clip
+
+    // Minimap border ring
+    ctx.beginPath();
+    ctx.arc(mx + size / 2, my + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(108, 99, 255, 0.55)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   function drawSlash(ctx, slash, age) {

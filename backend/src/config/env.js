@@ -49,10 +49,10 @@ const config = {
   // Game settings
   GAME: {
     tickRate: parseInt(process.env.GAME_TICK_RATE) || 30,
-    mapWidth: parseInt(process.env.MAP_WIDTH) || 1200,
-    mapHeight: parseInt(process.env.MAP_HEIGHT) || 800,
-    particleCount: parseInt(process.env.PARTICLE_COUNT) || 30,
-    playerSpeed: parseFloat(process.env.PLAYER_SPEED) || 5,
+    mapWidth: parseInt(process.env.MAP_WIDTH) || 3500,
+    mapHeight: parseInt(process.env.MAP_HEIGHT) || 3500,
+    particleCount: parseInt(process.env.PARTICLE_COUNT) || 150,
+    playerSpeed: parseFloat(process.env.PLAYER_SPEED) || 3.5,
     playerHp: parseInt(process.env.PLAYER_HP) || 100,
     attackDamage: parseInt(process.env.ATTACK_DAMAGE) || 25,
     attackRange: parseInt(process.env.ATTACK_RANGE) || 60,
