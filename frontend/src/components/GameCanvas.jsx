@@ -268,10 +268,15 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     let targetCamY = myLerpedPlayer ? myLerpedPlayer.y - viewH / 2 : mapHeight / 2 - viewH / 2;
     
     // Clamp camera to map boundaries so we don't see the dark void outside the map
-    if (viewW < mapWidth) {
+    if (viewW >= mapWidth) {
+      targetCamX = mapWidth / 2 - viewW / 2; // Center horizontally if screen is wider than map
+    } else {
       targetCamX = Math.max(0, Math.min(targetCamX, mapWidth - viewW));
     }
-    if (viewH < mapHeight) {
+    
+    if (viewH >= mapHeight) {
+      targetCamY = mapHeight / 2 - viewH / 2; // Center vertically if screen is taller than map
+    } else {
       targetCamY = Math.max(0, Math.min(targetCamY, mapHeight - viewH));
     }
 
@@ -288,9 +293,16 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     ctx.translate(-camX, -camY);
 
     // 2. Hexagon grid pattern (EvoWars style)
+    ctx.save();
+    // Clip the grid to the map boundaries so it doesn't spill into the void
+    ctx.beginPath();
+    ctx.rect(0, 0, mapWidth, mapHeight);
+    ctx.clip();
+    
     ctx.strokeStyle = mapTheme?.gridColor || 'rgba(108,99,255,0.05)';
     ctx.lineWidth = 1;
     drawHexagonGrid(ctx, camX, camY, viewW, viewH, 60);
+    ctx.restore();
 
     // 3. Map border (dãy phân cách cho pit)
     ctx.strokeStyle = mapTheme?.borderGlow || 'rgba(108,99,255,0.8)';
@@ -356,9 +368,9 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     // 8. Players
     for (let i = 0; i < lerpedPlayers.length; i++) {
       const pl = lerpedPlayers[i];
-      // Frustum culling (account for player scale!)
+      // Frustum culling (account for player scale and weapon reach!)
       const plScale = pl.scale || 1.0;
-      const visualRadius = (64 * plScale) / 2; // Base sprite is 64x64
+      const visualRadius = (64 * plScale) / 2 + 150; // Extra 150px padding for weapons and effects
       if (pl.x < camX - visualRadius || pl.x > camX + viewW + visualRadius || pl.y < camY - visualRadius || pl.y > camY + viewH + visualRadius) continue;
       drawPlayer(ctx, pl, pl.socketId === mySocketId, slashes);
     }
