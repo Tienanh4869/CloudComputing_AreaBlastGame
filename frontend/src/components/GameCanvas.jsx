@@ -244,8 +244,9 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
            rPlayer.x = pl.x;
            rPlayer.y = pl.y;
         } else {
-           rPlayer.x += (pl.x - rPlayer.x) * 0.25; 
-           rPlayer.y += (pl.y - rPlayer.y) * 0.25;
+           // Faster LERP for extremely smooth, responsive gameplay
+           rPlayer.x += (pl.x - rPlayer.x) * 0.45; 
+           rPlayer.y += (pl.y - rPlayer.y) * 0.45;
         }
       }
       lerpedPlayers.push({ ...pl, x: rPlayer.x, y: rPlayer.y });
