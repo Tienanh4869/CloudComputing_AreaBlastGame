@@ -26,6 +26,10 @@ export const useSocket = () => {
   const setMySocketId = useGameStore((s) => s.setMySocketId);
   const setMatchCountdown = useGameStore((s) => s.setMatchCountdown);
 
+  const setParticles = useGameStore((s) => s.setParticles);
+  const addParticles = useGameStore((s) => s.addParticles);
+  const removeParticles = useGameStore((s) => s.removeParticles);
+
   // Connect on mount
   useEffect(() => {
     if (!token) return;
@@ -130,6 +134,19 @@ export const useSocket = () => {
     // Kill events → kill feed
     socket.on('player_died', ({ killerNickname, targetNickname }) => {
       addKillFeed({ killer: killerNickname, victim: targetNickname });
+    });
+
+    // Particles optimizations
+    socket.on('sync_particles', (particles) => {
+      setParticles(particles);
+    });
+
+    socket.on('particles_spawned', (spawned) => {
+      addParticles(spawned);
+    });
+
+    socket.on('particles_collected', (collectedIds) => {
+      removeParticles(collectedIds);
     });
 
     // Server errors (room full, not found, match fail, etc.)

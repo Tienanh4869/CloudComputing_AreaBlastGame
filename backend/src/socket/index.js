@@ -177,6 +177,8 @@ const initSocket = (io) => {
           mapTheme: gameRoom.mapConfig.theme,
           isHost: socket.isHost,
         });
+        
+        socket.emit('sync_particles', Array.from(gameRoom.particles.values()));
 
         logger.gameEvent('player_joined_room', {
           nickname: socket.nickname,
@@ -439,6 +441,7 @@ const initSocket = (io) => {
         mapUrl: gameRoom.mapConfig.url,
         mapTheme: gameRoom.mapConfig.theme,
       });
+      io.to(String(roomId)).emit('sync_particles', Array.from(gameRoom.particles.values()));
 
       logger.gameEvent('match_started', { matchId: match.id, roomId });
 
@@ -447,16 +450,19 @@ const initSocket = (io) => {
       gameRoom.tickInterval = setInterval(async () => {
         if (!gameRoom.isRunning) return;
 
-        const { collected } = gameRoom.tick();
+        const { collected, spawned } = gameRoom.tick();
 
         // Broadcast full game state to all players individually (for Fog of War / Bushes)
         for (const player of gameRoom.players.values()) {
           io.to(player.socketId).emit('game_state', gameRoom.getStateFor(player.socketId));
         }
 
-        // Emit particle collection events
+        // Emit particle events
         if (collected && collected.length > 0) {
           io.to(String(roomId)).emit('particles_collected', collected);
+        }
+        if (spawned && spawned.length > 0) {
+          io.to(String(roomId)).emit('particles_spawned', spawned);
         }
 
         // Leaderboard broadcast logic
@@ -470,8 +476,8 @@ const initSocket = (io) => {
         }
       }, tickMs);
 
-      // Auto-end match after 2 minutes
-      setTimeout(() => endMatch(io, roomId, gameRoom), 2 * 60 * 1000);
+      // Auto-end match after 10 minutes
+      setTimeout(() => endMatch(io, roomId, gameRoom), 10 * 60 * 1000);
 
     } catch (err) {
       logger.error('[Socket] startMatch error:', err.message, err.stack);
