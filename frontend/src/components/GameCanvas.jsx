@@ -409,16 +409,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
     ctx.lineWidth = 1;
     ctx.strokeRect(mx, my, size, size);
 
-    // XP Orbs as yellow dots
-    // Assuming particles are in the store
-    const particles = Array.from(getState().particles.values());
-    ctx.fillStyle = '#FFD700'; // Yellow
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-      ctx.beginPath();
-      ctx.arc(mx + p.x * scaleX, my + p.y * scaleY, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Removed XP Orbs from minimap as requested
 
     // Players as dots
     for (let i = 0; i < players.length; i++) {
