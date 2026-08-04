@@ -11,8 +11,7 @@ const pendingRooms = new Map();
 // Cache fetched maps to avoid hitting Azure Blob Storage repeatedly
 const mapCache = new Map();
 
-// Function to procedurally generate random obstacles and bushes across the map
-function generateProceduralTerrain(width = 4000, height = 4000) {
+function generateProceduralTerrain(width = 8000, height = 8000) {
   // Evowars mode: no obstacles, wide open map
   const obstacles = [];
   const bushes = [];
@@ -47,7 +46,7 @@ const GameManager = {
       const baseUrl = process.env.MAPS_BASE_URL || 'https://arenablaststore13178.blob.core.windows.net/arenablast-maps';
       const mapUrl = `${baseUrl}/${randomMap}`;
       
-      let mapConfig = { width: 4000, height: 4000, url: mapUrl, theme: null };
+      let mapConfig = { width: 8000, height: 8000, url: mapUrl, theme: null };
       
       try {
         let data = mapCache.get(mapUrl);

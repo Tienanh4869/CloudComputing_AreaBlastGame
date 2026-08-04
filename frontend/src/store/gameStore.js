@@ -30,7 +30,7 @@ const useGameStore = create((set, get) => ({
   // Safe zone and timer
   safeZone: null,
   startTime: null,
-  matchDuration: 120000,
+  matchDuration: 600000,
 
   // Leaderboard (in-match)
   matchLeaderboard: [],
@@ -76,7 +76,6 @@ const useGameStore = create((set, get) => ({
 
     set({
       players:  state.players,
-      particles: state.particles,
       mapTheme: state.mapTheme || get().mapTheme,
       myLevel: me?.level ?? get().myLevel,
       myXp:    me?.xp    ?? get().myXp,
@@ -88,7 +87,7 @@ const useGameStore = create((set, get) => ({
       myRespawnTimer: me?.respawnTimer ?? 0,
       safeZone: state.safeZone ?? null,
       startTime: state.startTime ?? null,
-      matchDuration: state.matchDuration ?? 120000,
+      matchDuration: state.matchDuration ?? 600000,
     });
   },
 
@@ -113,6 +112,14 @@ const useGameStore = create((set, get) => ({
       set((state) => ({ slashes: state.slashes.filter((s) => s.id !== id) }));
     }, 200);
   },
+
+  // Particles optimizations
+  setParticles: (particles) => set({ particles }),
+  addParticles: (spawned) => set((state) => ({ particles: [...state.particles, ...spawned] })),
+  removeParticles: (collectedIds) => set((state) => {
+    const idSet = new Set(collectedIds);
+    return { particles: state.particles.filter(p => !idSet.has(p.id)) };
+  }),
 
   // Set final match results
   setMatchResults: (results) => set({ matchResults: results, matchStatus: 'finished' }),

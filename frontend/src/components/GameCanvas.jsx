@@ -239,29 +239,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       }
     }
 
-    // 6. Safe zone (Poison storm)
-    if (safeZone) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, W, H);
-      ctx.arc(safeZone.x, safeZone.y, Math.max(0, safeZone.radius), 0, Math.PI * 2, true);
-      ctx.fillStyle = 'rgba(120, 20, 200, 0.35)';
-      ctx.fill();
-
-      // Safe zone double-ring border (Zero lag alternative to shadowBlur)
-      ctx.beginPath();
-      ctx.arc(safeZone.x, safeZone.y, Math.max(0, safeZone.radius), 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 0, 255, 0.3)';
-      ctx.lineWidth = 8;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(safeZone.x, safeZone.y, Math.max(0, safeZone.radius), 0, Math.PI * 2);
-      ctx.strokeStyle = '#FF00FF';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.restore();
-    }
+    // Safe zone removed
 
     // 7. Particles (Collectible Dots) - Highly Optimized Batch Loop
     if (particles.length > 0) {

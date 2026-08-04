@@ -33,13 +33,7 @@ class GameRoom {
   _getCurrentSafeZone() {
     const cx = this.mapConfig.width / 2;
     const cy = this.mapConfig.height / 2;
-    const maxR = this.maxSafeZoneRadius || (Math.max(this.mapConfig.width, this.mapConfig.height) / 1.8);
-    let safeZoneRadius = maxR;
-    if (this.startedAt && this.matchDuration) {
-      const progress = (Date.now() - this.startedAt) / this.matchDuration;
-      safeZoneRadius = Math.max(80, maxR * (1 - progress));
-    }
-    return { cx, cy, radius: safeZoneRadius };
+    return { cx, cy, radius: 999999 };
   }
 
   _getRandomSafeSpawnPosition() {
@@ -80,23 +74,32 @@ class GameRoom {
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
-    const totalParticles = GAME.particleCount * 8; // More particles for larger map
+    const totalParticles = GAME.particleCount * 25; // Massive particles for 8000x8000 map
     while (this.particles.size < totalParticles) {
       this._addParticle();
     }
   }
 
   _addParticle() {
-    const id = generateId();
-    const pos = randomMapPosition(this.mapConfig.width, this.mapConfig.height, 30);
-    this.particles.set(id, {
-      id,
-      x: pos.x,
-      y: pos.y,
-      radius: PARTICLE_RADIUS,
-      value: GAME.particleScore,
-      color: this._randomParticleColor(),
-    });
+    const id = require('crypto').randomUUID(); // slightly faster than uuidv4 in node
+    const x = Math.random() * (this.mapConfig.width - 40) + 20;
+    const y = Math.random() * (this.mapConfig.height - 40) + 20;
+    const isBig = Math.random() > 0.95;
+    
+    const radius = isBig ? 12 : 5;
+    const value = isBig ? GAME.particleScore * 5 : GAME.particleScore;
+    
+    // Vibrant colors
+    const colors = ['#FF3366', '#33CCFF', '#FFCC00', '#00FF66', '#FF9933'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+
+    const particle = { id, x, y, radius, value, color };
+    this.particles.set(id, particle);
+    
+    if (this.newlySpawnedParticles) {
+      this.newlySpawnedParticles.push(particle);
+    }
+    return id;
   }
 
   _randomParticleColor() {
@@ -278,20 +281,14 @@ class GameRoom {
   // ── Game Tick ────────────────────────────────────────────────
 
   tick() {
-    if (!this.isRunning) return;
+    if (!this.isRunning) return { collected: [], spawned: [] };
 
     this.tickCount++;
     const now = Date.now();
-
-    // Calculate Safe Zone
-    let safeZoneRadius = this.maxSafeZoneRadius;
-    if (this.startedAt) {
-      const progress = (now - this.startedAt) / this.matchDuration;
-      safeZoneRadius = Math.max(0, this.maxSafeZoneRadius * (1 - progress));
-    }
-    const cx = this.mapConfig.width / 2;
-    const cy = this.mapConfig.height / 2;
-
+    
+    const collected = [];
+    this.newlySpawnedParticles = [];
+    
     // Move all alive players
     for (const player of this.players.values()) {
       // Skip fully dead players that aren't respawning
@@ -312,27 +309,6 @@ class GameRoom {
         }
         continue;
       }
-
-      // Safe zone damage (every 1 second = 30 ticks)
-      if (this.tickCount % 30 === 0) {
-        const distToCenter = Math.sqrt(Math.pow(player.x - cx, 2) + Math.pow(player.y - cy, 2));
-        if (distToCenter > safeZoneRadius) {
-          // Instant death by zone instead of slow HP loss
-          player.deaths++;
-          player.respawning = true;
-          player.respawnTimer = 3;
-          // Level reduction
-          player.level = Math.max(1, player.level - 1);
-          player.xp = 0;
-          player.maxXp = 10 * Math.pow(1.5, player.level - 1);
-          
-          this._dropLoot(player.x, player.y, player.score);
-          player.score = 0;
-          this._logEvent('player_died_zone', { playerId: player.playerId, nickname: player.nickname });
-        }
-      }
-
-      if (player.respawning) continue; // died to zone
 
       // Grow radius based on Level!
       player.radius = 16 + (player.level - 1) * 6;
@@ -407,7 +383,6 @@ class GameRoom {
     }
 
     // Check particle collisions
-    const collected = [];
     for (const [pid, particle] of this.particles) {
       for (const player of this.players.values()) {
         if (!player.alive) continue;
@@ -436,13 +411,17 @@ class GameRoom {
           });
 
           // Spawn replacement
-          setTimeout(() => this._addParticle(), 2000);
+          setTimeout(() => {
+            if (this.isRunning) this._addParticle();
+          }, 2000);
           break;
         }
       }
     }
 
-    return { collected };
+    const spawned = [...this.newlySpawnedParticles];
+    this.newlySpawnedParticles = [];
+    return { collected, spawned };
   }
 
   // ── State Snapshot ───────────────────────────────────────────
@@ -455,15 +434,7 @@ class GameRoom {
   getStateFor(viewerSocketId) {
     const viewer = viewerSocketId ? this.players.get(viewerSocketId) : null;
     
-    // Calculate current safe zone
-    let safeZoneRadius = this.maxSafeZoneRadius;
     const now = Date.now();
-    if (this.startedAt) {
-      const progress = (now - this.startedAt) / this.matchDuration;
-      safeZoneRadius = Math.max(0, this.maxSafeZoneRadius * (1 - progress));
-    }
-    const cx = this.mapConfig.width / 2;
-    const cy = this.mapConfig.height / 2;
 
     const playersArray = Array.from(this.players.values())
       .filter(p => {
@@ -501,8 +472,7 @@ class GameRoom {
       mapUrl: this.mapConfig.url,
       mapTheme: this.mapConfig.theme,
       players: playersArray,
-      particles: Array.from(this.particles.values()),
-      safeZone: { x: cx, y: cy, radius: safeZoneRadius },
+      particles: [], // Omitted to save bandwidth, sent via sync_particles
       startTime: this.startedAt,
       matchDuration: this.matchDuration,
       timestamp: now,
@@ -515,8 +485,7 @@ class GameRoom {
     this.matchId = matchId;
     this.isRunning = true;
     this.startedAt = Date.now();
-    this.matchDuration = 120 * 1000; // 2 minutes
-    this.maxSafeZoneRadius = Math.max(this.mapConfig.width, this.mapConfig.height) / 1.8; // Starts smaller so corners are poisoned early
+    this.matchDuration = 600 * 1000; // 10 minutes
     this.tickCount = 0;
     
     this._logEvent('match_started', { matchId });
