@@ -144,7 +144,7 @@ export default function GamePage() {
               fontWeight: 700,
             }}
           >
-            {currentRoom?.code || '------'}
+            {currentRoom?.name ? `${currentRoom.name} (${currentRoom.code})` : currentRoom?.code || '------'}
           </span>
         </div>
 

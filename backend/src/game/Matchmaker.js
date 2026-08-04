@@ -5,7 +5,7 @@ const { generateRoomCode } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
 const QUEUE_KEY = 'qm_queue';
-const MIN_PLAYERS = 4;
+const MIN_PLAYERS = 1; // Changed to 1 for testing Geo-Matchmaking
 const MAX_PLAYERS = 8;
 const MIN_WAIT_TIMEOUT_MS = 6000; // 6s wait time once min 4 players reached before launching match
 const TICK_RATE = 1000; // Check every 1s for responsive matchmaking
