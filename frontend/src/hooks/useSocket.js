@@ -137,10 +137,11 @@ export const useSocket = () => {
     socket.on('player_died', ({ killerNickname, targetNickname, killerSocketId, targetSocketId }) => {
       addKillFeed({ killer: killerNickname, victim: targetNickname });
       
-      const myId = socket.id;
-      if (myId === killerSocketId) {
+      const myNickname = useAuthStore.getState().player?.nickname;
+      
+      if (myNickname === killerNickname) {
         playAnnouncer('Enemy Slain!');
-      } else if (myId === targetSocketId) {
+      } else if (myNickname === targetNickname) {
         playAnnouncer('You have been defeated!');
       }
     });
