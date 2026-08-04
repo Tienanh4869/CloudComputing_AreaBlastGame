@@ -323,7 +323,7 @@ const initSocket = (io) => {
               occurredAt: new Date().toISOString(),
               matchId: gameRoom.matchId,
               playerId: socket.playerId,
-              targetPlayerId: hit.target.playerId,
+              targetPlayerId: hit.target.playerId || null,
             }).catch((eventError) => {
               logger.warn('[DailyQuest] Failed to publish kill event', {
                 error: eventError.message,
