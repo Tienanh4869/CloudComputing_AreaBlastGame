@@ -45,8 +45,7 @@ const GameManager = {
       // Use environment variable if available, else fallback to hardcoded
       const baseUrl = process.env.MAPS_BASE_URL || 'https://arenablaststore13178.blob.core.windows.net/arenablast-maps';
       const mapUrl = `${baseUrl}/${randomMap}`;
-      
-      let mapConfig = { width: 8000, height: 8000, url: mapUrl, theme: null };
+      let mapConfig = { width: 3500, height: 3500, url: mapUrl, theme: null };
       
       try {
         let data = mapCache.get(mapUrl);
@@ -61,11 +60,11 @@ const GameManager = {
             throw new Error(`HTTP ${response.status}`);
           }
         }
-        
         if (data) {
           // Deep clone the cached data so modifying theme does not pollute cache or other rooms
           const clonedData = JSON.parse(JSON.stringify(data));
-          mapConfig = { ...mapConfig, ...clonedData, url: mapUrl };
+          // Only merge theme, keep our 3500x3500 size
+          if (clonedData.theme) mapConfig.theme = clonedData.theme;
         }
       } catch (err) {
         logger.warn(`[GameManager] Failed to fetch map JSON from Azure Blob, using fallback`, err.message);

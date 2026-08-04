@@ -437,9 +437,7 @@ class GameRoom {
     const playersArray = Array.from(this.players.values())
       .filter(p => {
         if (!viewer) return true;
-        if (p.socketId === viewerSocketId) return true; // always see self
-        // Fog of war: hide if in a different bush
-        if (p.inBushId !== null && p.inBushId !== viewer.inBushId) return false;
+        // Send all players, let client do frustum culling
         return true;
       })
       .map((p) => ({

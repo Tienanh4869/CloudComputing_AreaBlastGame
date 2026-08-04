@@ -706,12 +706,17 @@ const initSocket = (io) => {
         playerCount: gameRoom.getPlayerCount(),
       });
 
-      // End match if room is empty
-      if (
-        gameRoom.isRunning &&
-        gameRoom.getPlayerCount() === 0
-      ) {
-        await endMatch(io, roomId, gameRoom);
+      // End match or destroy room if it is empty
+      if (gameRoom.getPlayerCount() === 0) {
+        if (gameRoom.isRunning) {
+          await endMatch(io, roomId, gameRoom);
+        } else {
+          // Room hasn't started yet, but is now empty. Destroy it to save resources.
+          try {
+            await Room.update({ status: 'finished' }, { where: { id: roomId } });
+          } catch(e) {}
+          GameManager.destroy(roomId);
+        }
       }
     }
   }
