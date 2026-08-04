@@ -80,7 +80,8 @@ class GameRoom {
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
-    while (this.particles.size < GAME.particleCount) {
+    const totalParticles = GAME.particleCount * 8; // More particles for larger map
+    while (this.particles.size < totalParticles) {
       this._addParticle();
     }
   }
@@ -146,8 +147,9 @@ class GameRoom {
       x: pos.x,
       y: pos.y,
       radius: PLAYER_RADIUS,
-      hp: GAME.playerHp,
-      maxHp: GAME.playerHp,
+      level: 1,
+      xp: 0,
+      maxXp: 10,
       score: 0,
       kills: 0,
       deaths: 0,
@@ -225,14 +227,11 @@ class GameRoom {
 
         if (!hasLoS) continue; // Attack blocked by obstacle!
 
-        target.hp -= GAME.attackDamage;
-
-        const event = { attacker: attacker.nickname, target: target.nickname, damage: GAME.attackDamage };
-
-        if (target.hp <= 0) {
-          target.hp = 0;
-          target.alive = false;
-          target.deaths++;
+        // One hit kill!
+        const event = { attacker: attacker.nickname, target: target.nickname, damage: 9999 };
+        
+        target.alive = false;
+        target.deaths++;
           attacker.kills++;
           attacker.score += 50;  // Bonus score for kill
           event.killed = true;
@@ -250,12 +249,13 @@ class GameRoom {
           });
           logger.gameEvent('player_killed', { killer: attacker.nickname, victim: target.nickname });
 
-          // Respawn after 3 seconds instead of dying completely
           target.respawning = true;
           target.respawnTimer = 3;
-        } else {
-          this._logEvent('player_hit', { playerId: target.playerId, damage: GAME.attackDamage });
-        }
+          
+          // Punish level
+          target.level = Math.max(1, target.level - 1);
+          target.xp = 0;
+          target.maxXp = 10 * Math.pow(1.5, target.level - 1);
 
         hits.push({ targetSocketId: sid, target, killed: target.hp <= 0, event });
       }
@@ -270,7 +270,6 @@ class GameRoom {
     const pos = this._getRandomSafeSpawnPosition();
     player.x = pos.x;
     player.y = pos.y;
-    player.hp = GAME.playerHp;
     player.alive = true;
     player.respawning = false;
     logger.gameEvent('player_respawned', { nickname: player.nickname, x: pos.x, y: pos.y });
@@ -308,7 +307,6 @@ class GameRoom {
             const pos = this._getRandomSafeSpawnPosition();
             player.x = pos.x;
             player.y = pos.y;
-            player.hp = GAME.playerHp;
             logger.gameEvent('player_respawned', { nickname: player.nickname, x: pos.x, y: pos.y });
           }
         }
@@ -319,12 +317,15 @@ class GameRoom {
       if (this.tickCount % 30 === 0) {
         const distToCenter = Math.sqrt(Math.pow(player.x - cx, 2) + Math.pow(player.y - cy, 2));
         if (distToCenter > safeZoneRadius) {
-          player.hp -= 10;
-          if (player.hp <= 0) {
-            player.hp = 0;
-            player.deaths++;
+          // Instant death by zone instead of slow HP loss
+          player.deaths++;
             player.respawning = true;
             player.respawnTimer = 3;
+            // Level reduction
+            player.level = Math.max(1, player.level - 1);
+            player.xp = 0;
+            player.maxXp = 10 * Math.pow(1.5, player.level - 1);
+            
             this._dropLoot(player.x, player.y, player.score);
             player.score = 0;
             this._logEvent('player_died_zone', { playerId: player.playerId, nickname: player.nickname });
@@ -334,12 +335,8 @@ class GameRoom {
 
       if (player.respawning) continue; // died to zone
 
-      // Auto health regeneration
-      if (player.hp < player.maxHp) {
-        player.hp = Math.min(player.maxHp, player.hp + 0.1);
-      }
-
-      player.radius = 16 + Math.min((player.score / 50) * 5, 40);
+      // Grow radius based on Level!
+      player.radius = 16 + (player.level - 1) * 6;
 
       // 1. If player grew bigger and penetrates an obstacle, gently push them away so they NEVER get stuck
       if (this.mapConfig.theme?.obstacles) {
@@ -422,6 +419,14 @@ class GameRoom {
 
         if (dist < player.radius + particle.radius) {
           player.score += particle.value;
+          player.xp += particle.value;
+          
+          if (player.xp >= player.maxXp) {
+            player.level += 1;
+            player.xp = player.xp - player.maxXp;
+            player.maxXp = Math.floor(player.maxXp * 1.5);
+          }
+          
           this.particles.delete(pid);
           collected.push({ particleId: pid, playerId: player.playerId, score: player.score });
 
@@ -476,8 +481,9 @@ class GameRoom {
         color: p.color,
         x: Math.round(p.x),
         y: Math.round(p.y),
-        hp: p.hp,
-        maxHp: p.maxHp,
+        level: p.level,
+        xp: p.xp,
+        maxXp: p.maxXp,
         score: p.score,
         kills: p.kills,
         alive: p.alive,
