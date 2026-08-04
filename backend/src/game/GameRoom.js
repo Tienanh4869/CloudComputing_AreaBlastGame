@@ -162,6 +162,7 @@ class GameRoom {
       dy: 0,
       facingX: 1, // default facing right
       facingY: 0,
+      isBoosting: false,
     };
     this.players.set(socketId, player);
     logger.gameEvent('player_joined', { roomId: this.roomId, nickname: playerData.nickname, x: pos.x, y: pos.y });
@@ -183,12 +184,13 @@ class GameRoom {
 
   // ── Input Handling ───────────────────────────────────────────
 
-  setPlayerMovement(socketId, dx, dy) {
+  setPlayerMovement(socketId, dx, dy, boosting = false) {
     const player = this.players.get(socketId);
     if (!player || !player.alive) return;
     const normalized = normalizeMovement(dx, dy);
     player.dx = normalized.dx;
     player.dy = normalized.dy;
+    player.isBoosting = boosting;
 
     // Update facing direction if moving
     if (normalized.dx !== 0 || normalized.dy !== 0) {
@@ -214,7 +216,7 @@ class GameRoom {
         Math.pow(attacker.x - target.x, 2) + Math.pow(attacker.y - target.y, 2)
       );
 
-      const dynamicAttackRange = GAME.attackRange + (attacker.radius - 16) * 1.5;
+      const dynamicAttackRange = 50 + (attacker.level - 1) * 5;
 
       if (dist <= dynamicAttackRange) {
         // Check line of sight (cover/hiding)
@@ -310,8 +312,27 @@ class GameRoom {
         continue;
       }
 
-      // Grow radius based on Level!
-      player.radius = 16 + (player.level - 1) * 6;
+      // Hitbox radius fixed to 20 for collisions
+      player.radius = 20;
+
+      // Handle Boost XP Drain
+      if (player.isBoosting) {
+        // ~20 XP per sec (at 30 TPS -> 0.67 XP per tick)
+        const xpDrain = 0.67;
+        player.xp -= xpDrain;
+        if (player.xp <= 0) {
+          if (player.level > 1) {
+            // Drop a level
+            player.level--;
+            player.maxXp = 10 * Math.pow(1.5, player.level - 1);
+            player.xp = player.maxXp - xpDrain; // wrap around
+          } else {
+            // Cannot drop below Level 1
+            player.xp = 0;
+            player.isBoosting = false; // Force stop
+          }
+        }
+      }
 
       // 1. If player grew bigger and penetrates an obstacle, gently push them away so they NEVER get stuck
       if (this.mapConfig.theme?.obstacles) {
@@ -324,8 +345,15 @@ class GameRoom {
 
       // 2. Smooth movement with separate X/Y slide against obstacles
       if (player.dx !== 0 || player.dy !== 0) {
+        // Calculate speed dynamically
+        // Speed drops slowly per level: Base * (1 - 0.005 * level)
+        // Boost adds 40%
+        let speedMultiplier = Math.max(0.6, 1 - (player.level * 0.005));
+        if (player.isBoosting) speedMultiplier *= 1.4;
+        const currentSpeed = GAME.playerSpeed * speedMultiplier;
+
         // Try X movement
-        let nextX = player.x + player.dx;
+        let nextX = player.x + player.dx * currentSpeed;
         let collideX = false;
         if (this.mapConfig.theme?.obstacles) {
           for (const obs of this.mapConfig.theme.obstacles) {
@@ -340,7 +368,7 @@ class GameRoom {
         }
 
         // Try Y movement
-        let nextY = player.y + player.dy;
+        let nextY = player.y + player.dy * currentSpeed;
         let collideY = false;
         if (this.mapConfig.theme?.obstacles) {
           for (const obs of this.mapConfig.theme.obstacles) {
@@ -450,15 +478,15 @@ class GameRoom {
         level: p.level,
         xp: p.xp,
         maxXp: p.maxXp,
-        score: p.score,
-        kills: p.kills,
         alive: p.alive,
         respawning: p.respawning,
         respawnTimer: p.respawnTimer,
-        avatarUrl: p.avatarUrl,
-        weaponUrl: p.weaponUrl,
         facingX: p.facingX,
         facingY: p.facingY,
+        isBoosting: p.isBoosting,
+        scale: Math.min(1 + p.level * 0.04, 2.0),
+        avatarUrl: p.avatarUrl,
+        weaponUrl: p.weaponUrl,
         radius: p.radius,
         inBushId: p.inBushId,
       }));
