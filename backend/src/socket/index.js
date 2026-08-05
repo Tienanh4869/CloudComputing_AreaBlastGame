@@ -500,8 +500,8 @@ const initSocket = (io) => {
         }
       }, tickMs);
 
-      // Auto-end match after 10 minutes
-      setTimeout(() => endMatch(io, roomId, gameRoom), 10 * 60 * 1000);
+      // Auto-end match after configured duration
+      setTimeout(() => endMatch(io, roomId, gameRoom), gameRoom.matchDuration);
 
     } catch (err) {
       logger.error('[Socket] startMatch error:', err.message, err.stack);

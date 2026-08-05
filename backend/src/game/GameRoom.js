@@ -218,10 +218,10 @@ class GameRoom {
       );
 
       // Dynamic attack range based on level (increases range)
-      // Level 1 = 50, Level 10 = 122, Level 20 = 202
       const dynamicAttackRange = 50 + (attacker.level - 1) * 8;
 
-      if (dist <= dynamicAttackRange) {
+      // Hit if the distance between centers is less than the attack range plus the target's radius
+      if (dist <= dynamicAttackRange + (target.radius || 20)) {
         // Check line of sight (cover/hiding)
         let hasLoS = true;
         if (this.mapConfig.theme?.obstacles) {
@@ -315,8 +315,9 @@ class GameRoom {
         continue;
       }
 
-      // Hitbox radius fixed to 20 for collisions
-      player.radius = 20;
+      // Hitbox radius scales with level (same as visual scale: 1.0x to 2.0x)
+      const scale = Math.min(1 + player.level * 0.04, 2.0);
+      player.radius = 20 * scale;
 
       // Handle Boost XP Drain
       if (player.isBoosting) {

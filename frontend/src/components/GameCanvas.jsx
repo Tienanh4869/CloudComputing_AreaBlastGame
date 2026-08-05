@@ -571,7 +571,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       ctx.rotate(angle);
       
       // Dynamic weapon size based on level (same as backend attackRange)
-      const dynamicAttackRange = 50 + ((player.level || 1) - 1) * 5; 
+      const dynamicAttackRange = 50 + ((player.level || 1) - 1) * 8; 
       const weaponSize = dynamicAttackRange * 0.8; // Scale weapon image to fit range
       
       // Draw weapon offset slightly from body
