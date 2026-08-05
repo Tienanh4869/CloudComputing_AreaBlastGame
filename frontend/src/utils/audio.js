@@ -12,33 +12,34 @@ function initAudio() {
   }
 }
 
-export function playSlashSound(volume = 0.5) {
+export function playSlashSound(volume = 1.0) {
   try {
     initAudio();
     const osc = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
     
-    // A quick swoosh sound (triangle wave descending rapidly)
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(900, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.1);
+    // Use square wave for a harsher, more noticeable "slash" / "swing" sound
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.2);
     
     // Volume envelope (sharp attack, quick fade)
     gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 0.02);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+    gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 0.05);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
     
     osc.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     
     osc.start();
-    osc.stop(audioCtx.currentTime + 0.15);
+    osc.stop(audioCtx.currentTime + 0.25);
+    console.log("🔊 Played Slash Sound");
   } catch (e) {
     console.warn("Audio not supported or auto-play prevented");
   }
 }
 
-export function playDeathSound(volume = 0.8) {
+export function playDeathSound(volume = 1.0) {
   try {
     initAudio();
     const osc = audioCtx.createOscillator();
@@ -46,18 +47,19 @@ export function playDeathSound(volume = 0.8) {
     
     // A dramatic low rumble/crash sound
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.5);
+    osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.8);
     
     gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 0.05);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+    gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 0.1);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
     
     osc.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     
     osc.start();
-    osc.stop(audioCtx.currentTime + 0.5);
+    osc.stop(audioCtx.currentTime + 0.8);
+    console.log("💀 Played Death Sound");
   } catch (e) {
     console.warn("Audio not supported or auto-play prevented");
   }
