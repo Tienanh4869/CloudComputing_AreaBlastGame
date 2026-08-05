@@ -117,19 +117,14 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
         const len = Math.hypot(dx, dy);
         if (len > 0) { dx /= len; dy /= len; }
         headingRef.current = { dx, dy };
-      } else if (joystickRef && joystickRef.current && (Math.abs(joystickRef.current.dx) > 0.05 || Math.abs(joystickRef.current.dy) > 0.05 || joystickRef.current.boosting !== undefined)) {
+      } else if (joystickRef && joystickRef.current && (Math.abs(joystickRef.current.dx) > 0.05 || Math.abs(joystickRef.current.dy) > 0.05)) {
         // 2. Mobile Touch Joystick steering
-        if (Math.abs(joystickRef.current.dx) > 0.05 || Math.abs(joystickRef.current.dy) > 0.05) {
-          hasActiveSteer = true;
-          dx = joystickRef.current.dx;
-          dy = joystickRef.current.dy;
-          const len = Math.hypot(dx, dy);
-          if (len > 0) {
-            headingRef.current = { dx: dx / len, dy: dy / len };
-          }
-        }
-        if (joystickRef.current.boosting !== undefined) {
-          isBoostingRef.current = joystickRef.current.boosting;
+        hasActiveSteer = true;
+        dx = joystickRef.current.dx;
+        dy = joystickRef.current.dy;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          headingRef.current = { dx: dx / len, dy: dy / len };
         }
       } else if (mousePosRef.current.active) {
         // 3. Laptop Mouse steering (steer toward cursor)
@@ -152,6 +147,13 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
             headingRef.current = { dx, dy };
           }
         }
+      }
+
+      // Check Mobile Boost Button State
+      if (joystickRef && joystickRef.current && joystickRef.current.boosting !== undefined) {
+        isBoostingRef.current = joystickRef.current.boosting || keys.has('ShiftLeft') || keys.has('ShiftRight');
+      } else {
+        isBoostingRef.current = keys.has('ShiftLeft') || keys.has('ShiftRight');
       }
 
       // 4. Continuous auto-glide navigation: keep moving in heading direction
