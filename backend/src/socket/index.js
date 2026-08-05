@@ -476,9 +476,11 @@ const initSocket = (io) => {
 
         const { collected, spawned } = gameRoom.tick();
 
-        // Broadcast full game state to all players in the room
-        const newState = gameRoom.getStateFor(null);
-        io.to(String(roomId)).emit('game_state', newState);
+        // Broadcast state directly to each connected player's socket to bypass Web PubSub group broadcast throttling/bugs
+        for (const socketId of gameRoom.players.keys()) {
+          const state = gameRoom.getStateFor(socketId);
+          io.to(socketId).emit('game_state', state);
+        }
         // Emit particle events
         if (collected && collected.length > 0) {
           io.to(String(roomId)).emit('particles_collected', collected);

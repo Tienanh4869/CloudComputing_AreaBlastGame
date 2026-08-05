@@ -72,7 +72,12 @@ export const useSocket = () => {
     // ── Game Events ────────────────────────────────────────────
 
     // Full game state (every tick)
+    let hasLoggedGameState = false;
     socket.on('game_state', (state) => {
+      if (!hasLoggedGameState) {
+        console.log('[Socket] First game_state received!', state);
+        hasLoggedGameState = true;
+      }
       updateGameState(state);
     });
 
