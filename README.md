@@ -177,19 +177,12 @@ git grep -rn "password\s*=" --and --not "process.env" .
 
 ---
 
-## 🤝 Thành viên & Phân công
 
-| Thành viên | MSSV | Vai trò | Phụ trách |
-|:---|:---|:---|:---|
-| **Nguyễn Tiến Anh** | *(Leader)* | Cloud Architect + Backend | Azure infra setup, Socket game engine, Service Bus, Functions |
-| **Thành viên 2** | | Frontend + AI Integration | React game UI, Azure AI Speech/Vision/Content Safety |
-| **Thành viên 3** | | DevOps + Security | GitHub Actions CI/CD, Key Vault, Trivy scanner, App Config |
 
 ### Công cụ cộng tác
 - **GitHub:** Quản lý code, Pull Request, Code Review, GitHub Projects (Kanban)
 - **GitHub Actions:** Tự động test + deploy khi merge vào `main`
 - **Azure Portal:** Theo dõi metrics, cấu hình dịch vụ
-- **Discord:** Liên lạc real-time trong nhóm
 
 ---
 
