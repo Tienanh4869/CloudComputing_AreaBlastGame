@@ -29,29 +29,38 @@
 
 ---
 
-## 🏗️ Kiến trúc hệ thống
+## 🏗️ Kiến trúc Hệ thống Cloud-Native
 
-```
-Browser (React + Canvas 2D + Socket.IO)
-         │ HTTP REST          │ WebSocket
-         ▼                    ▼
-   Backend (Node.js + Express + Socket.IO)
-   ├── REST API (/api/*)
-   ├── Socket.IO (game events)
-   └── Game Engine (GameRoom.js — 30fps tick)
-         │                    │
-         ▼                    ▼
-   PostgreSQL             Redis
-   (users, matches,       (game state,
-    events — persist)      cache — temp)
+Dự án được thiết kế theo chuẩn **Microservices** và **Event-Driven Architecture**, tận dụng triệt để hệ sinh thái của Microsoft Azure để đảm bảo khả năng mở rộng (Scalability), độ trễ thấp (Low Latency) và độ tin cậy cao (High Availability).
 
-Azure Cloud:
-├── Azure Container Apps   (Frontend + Backend)
-├── Azure Database PostgreSQL  (Flexible Server)
-├── Azure Cache for Redis
-├── Azure Container Registry  (Docker images)
-├── Azure Functions           (Leaderboard worker)
-└── GitHub Actions            (CI/CD pipeline)
+```mermaid
+graph TD
+    Client[Browser Client<br/>React + Canvas 2D] -->|HTTPS| ACA_FE[Azure Container Apps<br/>Frontend]
+    Client <-->|WebSocket| WebPubSub[Azure Web PubSub<br/>for Socket.io]
+    WebPubSub <--> ACA_BE[Azure Container Apps<br/>Backend Node.js]
+    
+    ACA_BE -->|Read/Write| Postgres[(Azure PostgreSQL<br/>Flexible Server)]
+    ACA_BE -->|Cache/State| Redis[(Azure Cache<br/>for Redis)]
+    ACA_BE -->|Assets| Blob[(Azure Blob Storage)]
+    
+    ACA_BE -->|Produce Events| ServiceBus[[Azure Service Bus]]
+    ServiceBus -->|Consume| AzureFunc((Azure Functions<br/>Worker))
+    AzureFunc -->|Update| Postgres
+    
+    ACA_BE -->|Fetch Config| AppConfig{Azure App Configuration}
+    ACA_BE -->|Fetch Secrets| KeyVault{Azure Key Vault}
+    
+    ACA_BE -->|Audio| Speech((Azure AI Speech))
+    ACA_BE -->|Image Mod| Vision((Azure AI Vision))
+    ACA_BE -->|Text Mod| ContentSafety((Azure AI Content Safety))
+    ACA_BE -->|Geo IP| Maps((Azure Maps))
+    
+    ACA_BE -->|Webhook| LogicApp((Azure Logic Apps))
+    
+    ACR[Azure Container Registry] -.->|Images| ACA_FE
+    ACR -.->|Images| ACA_BE
+    
+    GitHub[GitHub Actions CI/CD] -.->|Build/Push| ACR
 ```
 
 ---
@@ -122,16 +131,30 @@ Xem đầy đủ tại [docs/phase1-local.md#api](./docs/phase1-local.md).
 
 ---
 
-## 🗺️ Cloud Mapping
+## ☁️ Hệ sinh thái Cloud Services (18 Dịch vụ)
 
-| Khái niệm | Tính năng trong ArenaBlast |
-|---|---|
-| **SaaS** | Game chạy trên trình duyệt, không cài phần mềm |
-| **PaaS** | Azure Container Apps cho Frontend + Backend |
-| **Serverless** | Azure Function xử lý leaderboard async |
-| **CI/CD** | GitHub Actions: Test → Docker Build → Deploy |
-| **Auto-scaling** | Container Apps scale 1→3 replica tự động |
-| **Observability** | /health, /metrics, Azure App Insights |
+Dự án tự hào tích hợp toàn diện **18 dịch vụ đám mây và công nghệ Cloud-Native** theo chuẩn Enterprise:
+
+| Nhóm | Dịch vụ Cloud | Vai trò trong hệ thống |
+|:---|:---|:---|
+| **Compute / PaaS** | **1. Azure Container Registry (ACR)** | Lưu trữ các Docker Images bảo mật trước khi triển khai. |
+| | **2. Azure Container Apps (ACA)** | Chạy Frontend/Backend Serverless, tự động Scale linh hoạt. |
+| **Database & Cache** | **3. Azure PostgreSQL** | Lưu trữ thông tin tài khoản, lịch sử đấu và bảng xếp hạng. |
+| | **4. Azure Cache for Redis** | Caching dữ liệu và lưu trữ session tạm thời cực nhanh. |
+| **Messaging & Events** | **5. Azure Web PubSub** | Xử lý hàng vạn kết nối Websocket đồng thời với độ trễ siêu thấp. |
+| | **6. Azure Service Bus** | Message Broker nhận Event kết thúc trận đấu, gửi cho Worker xử lý ngầm. |
+| | **7. Azure Functions** | Worker Serverless tính toán điểm XP/Rank mà không làm lag Game Server. |
+| | **8. Azure Logic Apps** | Serverless Workflow gửi Email chào mừng người chơi mới qua Webhook. |
+| **Storage & Security** | **9. Azure Blob Storage** | Lưu trữ Map, Asset đồ họa (Sprites) tĩnh. |
+| | **10. Azure Key Vault** | Lưu trữ chuỗi kết nối DB, API Keys tuyệt đối an toàn. |
+| | **11. Azure App Configuration** | Thay đổi thiết lập game (Feature flags) realtime không cần restart server. |
+| **AI & Tích hợp** | **12. Azure AI Speech** | Đọc tên chuỗi hạ gục (Double Kill, Rampage) bằng giọng nói thời gian thực. |
+| | **13. Azure AI Vision** | Quét và chặn người chơi tải lên Avatar phản cảm, bạo lực (Adult/Gory). |
+| | **14. Azure AI Content Safety** | Tự động che mờ các tin nhắn chửi thề (Profanity) trong khung chat. |
+| | **15. Azure Maps** | Phân tích IP người chơi ra Quốc gia (VN, US) để ghép phòng tối ưu ping. |
+| **DevOps & MLOps** | **16. OpenTelemetry & Azure Monitor** | Đo lường độ trễ mạng (Latency), giám sát Metrics và Distributed Tracing. |
+| | **17. GitHub Actions** | Pipeline CI/CD tự động Build, Test và Deploy lên Azure. |
+| | **18. Trivy Scanner** | Quét lỗ hổng bảo mật Docker Image (Supply Chain Security) trước khi Push. |
 
 ---
 
