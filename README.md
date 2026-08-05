@@ -9,7 +9,7 @@
 ![Socket.IO](https://img.shields.io/badge/Realtime-Socket.IO-010101?style=for-the-badge&logo=socketdotio)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-**Dự án môn Điện toán đám mây (IN4526) — Trường Đại học Bách Khoa Hà Nội**
+**Dự án môn Điện toán đám mây (IN4526)**
 
 🌐 **Live:** [https://arenablast-frontend.icyhill-22f427c6.southeastasia.azurecontainerapps.io](https://arenablast-frontend.icyhill-22f427c6.southeastasia.azurecontainerapps.io)
 
