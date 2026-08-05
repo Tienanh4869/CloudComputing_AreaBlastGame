@@ -54,8 +54,9 @@ const config = {
     particleCount: parseInt(process.env.PARTICLE_COUNT) || 150,
     playerSpeed: parseFloat(process.env.PLAYER_SPEED) || 3.5,
     playerHp: parseInt(process.env.PLAYER_HP) || 100,
-    attackDamage: parseInt(process.env.ATTACK_DAMAGE) || 25,
-    attackRange: parseInt(process.env.ATTACK_RANGE) || 60,
+    slashCooldownMs: parseInt(process.env.SLASH_COOLDOWN_MS) || 800,
+    sizeIncreasePerLevel: parseFloat(process.env.SIZE_INCREASE_PER_LEVEL) || 0.04,
+    maxPlayerSizeMultiplier: parseFloat(process.env.MAX_PLAYER_SIZE_MULTIPLIER) || 2.0,
     particleScore: parseInt(process.env.PARTICLE_SCORE) || 10,
   },
 
