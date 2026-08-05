@@ -174,7 +174,7 @@ const initSocket = (io) => {
           facingX: newPlayer.facingX,
           facingY: newPlayer.facingY,
           isBoosting: newPlayer.isBoosting,
-          scale: Math.min(1 + newPlayer.level * 0.04, 2.0),
+          scale: Math.min(1 + newPlayer.level * GAME.sizeIncreasePerLevel, GAME.maxPlayerSizeMultiplier),
           avatarUrl: newPlayer.avatarUrl,
           weaponUrl: newPlayer.weaponUrl,
           radius: newPlayer.radius,

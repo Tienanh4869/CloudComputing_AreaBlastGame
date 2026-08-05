@@ -204,7 +204,7 @@ class GameRoom {
     if (!attacker || !attacker.alive || attacker.respawning) return null;
 
     const now = Date.now();
-    if (now - attacker.lastAttack < ENV.GAME.slashCooldownMs) return null;
+    if (now - attacker.lastAttack < GAME.slashCooldownMs) return null;
     attacker.lastAttack = now;
 
     // Return empty array instead of null so caller knows attack happened (even if no hit)
@@ -315,7 +315,7 @@ class GameRoom {
       }
 
       // Hitbox radius scales with level
-      const scale = Math.min(1 + player.level * ENV.GAME.sizeIncreasePerLevel, ENV.GAME.maxPlayerSizeMultiplier);
+      const scale = Math.min(1 + player.level * GAME.sizeIncreasePerLevel, GAME.maxPlayerSizeMultiplier);
       player.radius = 20 * scale;
 
       // Handle Boost XP Drain
@@ -479,7 +479,7 @@ class GameRoom {
       facingX: p.facingX,
       facingY: p.facingY,
       isBoosting: p.isBoosting,
-      scale: Math.min(1 + p.level * ENV.GAME.sizeIncreasePerLevel, ENV.GAME.maxPlayerSizeMultiplier),
+      scale: Math.min(1 + p.level * GAME.sizeIncreasePerLevel, GAME.maxPlayerSizeMultiplier),
       avatarUrl: p.avatarUrl,
       weaponUrl: p.weaponUrl,
       radius: p.radius,
@@ -522,7 +522,7 @@ class GameRoom {
       else if (p.dx || p.dy) state = 1;
       
       const angle = Math.atan2(p.facingY || 0, p.facingX || 1);
-      const scale = Math.min(1 + p.level * ENV.GAME.sizeIncreasePerLevel, ENV.GAME.maxPlayerSizeMultiplier);
+      const scale = Math.min(1 + p.level * GAME.sizeIncreasePerLevel, GAME.maxPlayerSizeMultiplier);
 
       cellsData[cellId].push([
         p.socketId,
