@@ -1,5 +1,5 @@
 // src/pages/GamePage.jsx — Main game screen with responsive HUD and mobile support
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 import useAuthStore from '../store/authStore';
