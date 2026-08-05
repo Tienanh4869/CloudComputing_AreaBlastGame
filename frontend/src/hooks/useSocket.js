@@ -6,8 +6,14 @@ import useGameStore from '../store/gameStore';
 import toast from 'react-hot-toast';
 import { playAnnouncer } from '../api/speech';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+let SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
+// Safeguard: If VITE_SOCKET_URL wrongly points to PubSub, fallback to the backend's base URL.
+if (SOCKET_URL.includes('.webpubsub.azure.com') || SOCKET_URL.startsWith('wss://')) {
+  console.warn("VITE_SOCKET_URL is incorrectly pointing to Web PubSub! It must point to the Backend. Falling back to API URL.");
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+  SOCKET_URL = apiBase.replace('/api', '');
+}
 
 let socketInstance = null;
 let localKillStreak = 0; // Tracks consecutive kills without dying
