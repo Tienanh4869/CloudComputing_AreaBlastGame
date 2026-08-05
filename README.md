@@ -285,6 +285,48 @@ docker-compose up --build
 
 ---
 
+## 💰 Chi phí Dịch vụ Cloud
+
+> SKU/Tier được truy vấn trực tiếp từ **Azure CLI** vào ngày 05/08/2026. Subscription: **Azure for Students** ($100 credit).
+
+| # | Dịch vụ | Resource | SKU / Tier | Chi phí/Tháng |
+|:---:|:---|:---|:---|:---:|
+| 1 | **Azure Container Registry** | `arenablastacr` | Basic | ~$5.10 |
+| 2 | **Azure Container Apps — Frontend** | `arenablast-frontend` | 0.5 vCPU / 1 GiB | ~$2–5 |
+| 3 | **Azure Container Apps — Backend** | `arenablast-backend` | 0.5 vCPU / 1 GiB | ~$10–15 |
+| 4 | **Azure PostgreSQL Flexible Server** | `arenablast-db` | Standard_B1ms / 128 GB | ~$20–25 |
+| 5 | **Azure Cache for Redis Enterprise** | `arenablast-redis-123` | **Balanced B0** (HA + Zone Redundant) | ~$110 |
+| 6 | **Azure Web PubSub** | `arenablast-pubsub` | **Standard S1** (1 unit) | ~$35.70 |
+| 7 | **Azure Service Bus** | `arenablast-sb-729` | Basic | ~$0.10 |
+| 8 | **Azure Functions** | `arenablast-worker-99` | Consumption (Free 1M calls) | **$0** |
+| 9 | **Azure Logic Apps** | `arenablast-logic` | Consumption | **<$0.01** |
+| 10 | **Azure Blob Storage** | `arenablaststore13178` | Standard LRS | **$0.05** |
+| 11 | **Azure Key Vault** | `areablast-kv-123` | Standard (10k ops free) | **$0** |
+| 12 | **Azure App Configuration** | `arenablast-appconfig-123` | **Free Tier** | **$0** |
+| 13 | **Azure AI Speech** | `arenablast-speech` | **F0 Free** (5h TTS/tháng) | **$0** |
+| 14 | **Azure AI Vision** | `arenablast-vision` | **F0 Free** (5k images/tháng) | **$0** |
+| 15 | **Azure AI Content Safety** | `arenablast-contentsafety` | **F0 Free** (5k calls/tháng) | **$0** |
+| 16 | **Azure Maps** | `arenablast-maps` | Standard G2 (10k tx free) | **$0** |
+| 17 | **Azure Monitor / App Insights** | `workspace-arenablastrghGDX` | Log Analytics Free (5 GB) | **$0** |
+| 18 | **GitHub Actions (CI/CD)** | Private Repo | Free 2,000 min/tháng | ~$0–4 |
+
+### Tổng chi phí
+
+| Danh mục | Chi phí/Tháng |
+|:---|:---:|
+| Compute (ACR + Container Apps × 2) | ~$17–25 |
+| Database PostgreSQL B1ms / 128 GB | ~$20–25 |
+| Redis Enterprise Balanced B0 | ~$110 |
+| Web PubSub Standard S1 | ~$35.70 |
+| Tất cả dịch vụ còn lại (Free Tier) | ~$0–4 |
+| **TỔNG CỘNG** | **~$185–200/tháng** |
+| Azure for Students Credit | **−$100** |
+| **Chi phí thực trả** | **~$85–100/tháng** |
+
+> **💡 Chiến lược tối ưu chi phí:** 10 trong số 18 dịch vụ được cấu hình **Free Tier / Consumption** — đây là ví dụ điển hình của **FinOps**: chỉ chi tiền cho những gì thực sự cần hiệu suất cao (Redis Enterprise cho Low Latency game, Web PubSub cho Scale WebSocket) và miễn phí hóa phần còn lại.
+
+---
+
 <div align="center">
 
 *⚔️ ArenaBlast — Môn Điện toán đám mây (IN4526) — 2026*
