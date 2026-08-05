@@ -135,8 +135,8 @@ const initSocket = (io) => {
         }
 
         // Prevent same account from playing against itself from ANOTHER tab/browser
-        if (socket.playerId) {
-          const isAlreadyInRoom = Array.from(gameRoom.players.values()).some(p => p.playerId === socket.playerId);
+        if (socket.userId) {
+          const isAlreadyInRoom = Array.from(gameRoom.players.values()).some(p => p.playerId === socket.userId);
           if (isAlreadyInRoom) {
             socket.emit('error', { message: 'Tài khoản này đang ở trong phòng rồi (Có thể đang mở ở tab/trình duyệt khác).' });
             return;
@@ -145,7 +145,7 @@ const initSocket = (io) => {
 
         // Add player to game state
         const playerState = gameRoom.addPlayer(socket.id, {
-          playerId: socket.playerId,
+          playerId: socket.userId || crypto.randomUUID(),
           nickname: socket.nickname,
           color: socket.avatarColor,
           avatarUrl: socket.avatarUrl,
@@ -476,11 +476,9 @@ const initSocket = (io) => {
 
         const { collected, spawned } = gameRoom.tick();
 
-        // Broadcast full game state to all players individually (for Fog of War / Bushes)
-        for (const player of gameRoom.players.values()) {
-          io.to(player.socketId).emit('game_state', gameRoom.getStateFor(player.socketId));
-        }
-
+        // Broadcast full game state to all players in the room
+        const newState = gameRoom.getStateFor(null);
+        io.to(String(roomId)).emit('game_state', newState);
         // Emit particle events
         if (collected && collected.length > 0) {
           io.to(String(roomId)).emit('particles_collected', collected);

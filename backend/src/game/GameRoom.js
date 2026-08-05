@@ -352,8 +352,8 @@ class GameRoom {
       // 2. Smooth movement with separate X/Y slide against obstacles
       if (player.dx !== 0 || player.dy !== 0) {
         // Calculate speed dynamically
-        // Reduce base speed further for better control (multiplier 0.55)
-        let speedMultiplier = Math.max(0.5, 1 - (player.level * 0.005)) * 0.55;
+        // Reduce base speed further for better control (multiplier 0.75 for faster movement)
+        let speedMultiplier = Math.max(0.5, 1 - (player.level * 0.005)) * 0.75;
         if (player.isBoosting) speedMultiplier *= 1.4;
         const currentSpeed = GAME.playerSpeed * speedMultiplier;
 
