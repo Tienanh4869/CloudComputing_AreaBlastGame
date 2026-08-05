@@ -51,7 +51,7 @@ async function bootstrap() {
   const { useAzureSocketIO } = require("@azure/web-pubsub-socket.io");
 
   // 5.5 Setup Azure Web PubSub or Redis Adapter (Temporarily bypassed for stability)
-  if (false && env.WEB_PUBSUB_CONNECTION_STRING) {
+  if (env.WEB_PUBSUB_CONNECTION_STRING) {
     logger.info('[Socket] Configuring Azure Web PubSub for Socket.IO...');
     useAzureSocketIO(io, {
       hub: "ArenaBlastHub",
