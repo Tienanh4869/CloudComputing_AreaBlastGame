@@ -258,7 +258,7 @@ class GameRoom {
           logger.gameEvent('player_killed', { killer: attacker.nickname, victim: target.nickname });
 
           target.respawning = true;
-          target.respawnTimer = 3;
+          target.respawnTimer = 5;
           
           // Punish level
           target.level = Math.max(1, target.level - 1);
@@ -475,6 +475,7 @@ class GameRoom {
       maxXp: p.maxXp,
       alive: p.alive,
       respawning: p.respawning,
+      respawnTimer: p.respawnTimer,
       facingX: p.facingX,
       facingY: p.facingY,
       isBoosting: p.isBoosting,
@@ -494,6 +495,7 @@ class GameRoom {
       particles: [], // Omitted to save bandwidth
       startTime: this.startedAt,
       matchDuration: this.matchDuration,
+      timeLeft: this.startedAt ? Math.max(0, Math.floor((this.matchDuration - (now - this.startedAt)) / 1000)) : 0,
       timestamp: now,
     };
   }
@@ -565,7 +567,7 @@ class GameRoom {
     this.matchId = matchId;
     this.isRunning = true;
     this.startedAt = Date.now();
-    this.matchDuration = 600 * 1000; // 10 minutes
+    this.matchDuration = 4 * 60 * 1000; // 4 minutes
     this.tickCount = 0;
 
     this._logEvent('match_started', { matchId });

@@ -23,6 +23,7 @@ export default function GamePage() {
   const myRespawnTimer = useGameStore((s) => s.myRespawnTimer);
   const startTime = useGameStore((s) => s.startTime);
   const matchDuration = useGameStore((s) => s.matchDuration);
+  const timeLeft = useGameStore((s) => s.timeLeft);
   const mapWidth = useGameStore((s) => s.mapWidth);
   const mapHeight = useGameStore((s) => s.mapHeight);
   const mapUrl = useGameStore((s) => s.mapUrl);
@@ -58,15 +59,7 @@ export default function GamePage() {
   }, [matchStatus, navigate]);
 
   // Timer logic
-  const [timeLeft, setTimeLeft] = useState(0);
-  useEffect(() => {
-    if (matchStatus !== 'playing' || !startTime) return;
-    const interval = setInterval(() => {
-      const remaining = Math.max(0, matchDuration - (Date.now() - startTime));
-      setTimeLeft(Math.floor(remaining / 1000));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [matchStatus, startTime, matchDuration]);
+  // (Now automatically synced with Server's state via game_state updates)
 
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60);
