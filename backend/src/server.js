@@ -38,24 +38,6 @@ async function bootstrap() {
   // 4. Create HTTP server
   const httpServer = http.createServer(app);
 
-  // Ép CORS headers cho mọi request vào /socket.io/ để sửa lỗi Web PubSub adapter chặn CORS
-  httpServer.on('request', (req, res) => {
-    if (req.url && req.url.startsWith('/socket.io/')) {
-      const origin = req.headers.origin;
-      if (origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      }
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-    }
-  });
-
   const io = new SocketServer(httpServer, {
     cors: {
       origin: CORS_ORIGIN,
