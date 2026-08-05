@@ -62,16 +62,22 @@ export const useSocket = () => {
       toast.error('Cannot connect to game server');
     });
 
-    // ── Game Events ────────────────────────────────────────────
-
-    // Full game state (every tick)
-    socket.on('game_state', (state) => {
-      updateGameState(state);
+    // ── Optimized Game Events ──────────────────────────────────
+    
+    // Fast Sync (30 Hz): Delta positions via array compression
+    socket.on('u', (playersData) => {
+      useGameStore.getState().updatePlayersFast(playersData);
     });
 
-    // Leaderboard update
-    socket.on('leaderboard_update', ({ scores }) => {
-      updateLeaderboard(scores);
+    // Slow Sync (0.5 Hz): Leaderboard, score, kills, level, map
+    socket.on('slow_sync', (data) => {
+      if (data.players) {
+        useGameStore.getState().updatePlayersSlow(data.players);
+      }
+      if (data.top) {
+        const scores = data.top.map((t, i) => ({ rank: i + 1, nickname: t[0], score: t[1], kills: t[2] }));
+        useGameStore.getState().updateLeaderboard(scores);
+      }
     });
 
     // Confirmed join — server acknowledged our join_room

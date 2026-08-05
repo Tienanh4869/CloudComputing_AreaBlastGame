@@ -113,6 +113,66 @@ const useGameStore = create((set, get) => ({
     }, 200);
   },
 
+  // ── Optimized Broadcast Handlers ──────────────────────────────
+  updatePlayersFast: (playersData) => {
+    // playersData: [ [socketId, x, y, angle, state, scale], ... ]
+    set((state) => {
+      const newPlayers = [...state.players];
+      for (const pData of playersData) {
+        const [socketId, x, y, angle, pState, scale] = pData;
+        const idx = newPlayers.findIndex((p) => p.socketId === socketId);
+        if (idx !== -1) {
+          const p = { ...newPlayers[idx] };
+          p.x = x;
+          p.y = y;
+          p.facingX = Math.cos(angle);
+          p.facingY = Math.sin(angle);
+          p.isBoosting = pState === 3;
+          p.isAttacking = pState === 2;
+          p.scale = scale;
+          newPlayers[idx] = p;
+        }
+      }
+      return { players: newPlayers };
+    });
+  },
+
+  updatePlayersSlow: (playersSlowData) => {
+    // playersSlowData: [ [socketId, score, kills, level, xp, alive, respawning], ... ]
+    set((state) => {
+      const newPlayers = [...state.players];
+      let myScore = state.myScore;
+      let myKills = state.myKills;
+      let myLevel = state.myLevel;
+      let myXp = state.myXp;
+      let myAlive = state.myAlive;
+
+      for (const pData of playersSlowData) {
+        const [socketId, score, kills, level, xp, alive, respawning] = pData;
+        const idx = newPlayers.findIndex((p) => p.socketId === socketId);
+        if (idx !== -1) {
+          const p = { ...newPlayers[idx] };
+          p.score = score;
+          p.kills = kills;
+          p.level = level;
+          p.xp = xp;
+          p.alive = alive === 1;
+          p.respawning = respawning === 1;
+          newPlayers[idx] = p;
+
+          if (socketId === state.mySocketId) {
+            myScore = score;
+            myKills = kills;
+            myLevel = level;
+            myXp = xp;
+            myAlive = alive === 1;
+          }
+        }
+      }
+      return { players: newPlayers, myScore, myKills, myLevel, myXp, myAlive };
+    });
+  },
+
   // Particles optimizations
   setParticles: (particles) => set({ particles }),
   addParticles: (spawned) => set((state) => ({ particles: [...state.particles, ...spawned] })),

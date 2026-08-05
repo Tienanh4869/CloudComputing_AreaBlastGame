@@ -476,12 +476,10 @@ const initSocket = (io) => {
 
         const { collected, spawned } = gameRoom.tick();
 
-        // Broadcast full game state to all players individually (for Fog of War / Bushes)
-        for (const player of gameRoom.players.values()) {
-          io.to(player.socketId).emit('game_state', gameRoom.getStateFor(player.socketId));
-        }
+        // Broadcast compressed combat state to the whole room
+        gameRoom._broadcastCombatTick(io);
 
-        // Emit particle events
+        // Emit particle events (if any collected/spawned)
         if (collected && collected.length > 0) {
           io.to(String(roomId)).emit('particles_collected', collected);
         }
@@ -489,14 +487,11 @@ const initSocket = (io) => {
           io.to(String(roomId)).emit('particles_spawned', spawned);
         }
 
-        // Leaderboard broadcast logic
+        // Leaderboard and Minimap broadcast logic (Slow Sync)
         gameRoom.leaderboardTick = (gameRoom.leaderboardTick || 0) + 1;
         if (gameRoom.leaderboardTick >= GAME.tickRate * 2) {
           gameRoom.leaderboardTick = 0;
-          const scores = Array.from(gameRoom.players.values())
-            .sort((a, b) => b.score - a.score)
-            .map((p, i) => ({ rank: i + 1, nickname: p.nickname, score: p.score, kills: p.kills }));
-          io.to(String(roomId)).emit('leaderboard_update', { scores });
+          gameRoom._broadcastSlowData(io);
         }
       }, tickMs);
 

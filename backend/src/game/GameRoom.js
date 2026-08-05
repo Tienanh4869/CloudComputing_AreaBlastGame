@@ -4,6 +4,7 @@
 
 const { GAME } = require('../config/env');
 const { circleCollide, circleRectCollide, resolveCircleRectCollision, lineRectCollide, clampToMap, normalizeMovement, randomMapPosition } = require('./Physics');
+const { getCell, getSurroundingCells } = require('./GridManager');
 const { generateId } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
@@ -18,6 +19,8 @@ class GameRoom {
     this.mapConfig = mapConfig;
     this.players = new Map();      // socketId → player state
     this.particles = new Map();    // particleId → particle state
+    this.particleGrid = new Map(); // cellId → Set of particle IDs
+    this.newlySpawnedParticles = []; 
     this.isRunning = false;
     this.tickInterval = null;
     this.startedAt = null;
@@ -93,8 +96,14 @@ class GameRoom {
     const colors = ['#FF3366', '#33CCFF', '#FFCC00', '#00FF66', '#FF9933'];
     const color = colors[Math.floor(Math.random() * colors.length)];
 
-    const particle = { id, x, y, radius, value, color };
+    const cellId = getCell(x, y).id;
+    const particle = { id, x, y, radius, value, color, cellId };
     this.particles.set(id, particle);
+
+    if (!this.particleGrid.has(cellId)) {
+      this.particleGrid.set(cellId, new Set());
+    }
+    this.particleGrid.get(cellId).add(id);
     
     if (this.newlySpawnedParticles) {
       this.newlySpawnedParticles.push(particle);
@@ -125,6 +134,8 @@ class GameRoom {
       const px = Math.min(Math.max(x + Math.cos(angle) * dist, PARTICLE_RADIUS), GAME.mapWidth - PARTICLE_RADIUS);
       const py = Math.min(Math.max(y + Math.sin(angle) * dist, PARTICLE_RADIUS), GAME.mapHeight - PARTICLE_RADIUS);
       
+      const cellId = getCell(px, py).id;
+      
       this.particles.set(id, {
         id,
         x: px,
@@ -132,7 +143,13 @@ class GameRoom {
         radius: PARTICLE_RADIUS + (valuePerParticle > GAME.particleScore ? 4 : 0),
         value: valuePerParticle,
         color: this._randomParticleColor(),
+        cellId,
       });
+
+      if (!this.particleGrid.has(cellId)) {
+        this.particleGrid.set(cellId, new Set());
+      }
+      this.particleGrid.get(cellId).add(id);
     }
   }
 
@@ -415,37 +432,48 @@ class GameRoom {
       }
     }
 
-    // Check particle collisions
-    for (const [pid, particle] of this.particles) {
-      for (const player of this.players.values()) {
-        if (!player.alive) continue;
+    // Check particle collisions via Spatial Hashing
+    for (const player of this.players.values()) {
+      if (!player.alive) continue;
 
-        const dist = Math.sqrt(
-          Math.pow(player.x - particle.x, 2) + Math.pow(player.y - particle.y, 2)
-        );
+      const playerCell = getCell(player.x, player.y);
+      const cellsToCheck = getSurroundingCells(playerCell.col, playerCell.row);
 
-        if (dist < player.radius + particle.radius) {
-          player.score += particle.value;
-          player.xp += particle.value;
-          
-          if (player.xp >= player.maxXp) {
-            player.level += 1;
-            player.xp = player.xp - player.maxXp;
-            player.maxXp = Math.floor(player.maxXp * 1.5);
+      for (const cellId of cellsToCheck) {
+        const particleIds = this.particleGrid.get(cellId);
+        if (!particleIds) continue;
+
+        for (const pid of particleIds) {
+          const particle = this.particles.get(pid);
+          if (!particle) continue;
+
+          // Optimized distance squared check to avoid Math.sqrt
+          const distSq = Math.pow(player.x - particle.x, 2) + Math.pow(player.y - particle.y, 2);
+          const minD = player.radius + particle.radius;
+
+          if (distSq < minD * minD) {
+            player.score += particle.value;
+            player.xp += particle.value;
+            
+            if (player.xp >= player.maxXp) {
+              player.level += 1;
+              player.xp = player.xp - player.maxXp;
+              player.maxXp = Math.floor(player.maxXp * 1.5);
+            }
+            
+            this.particles.delete(pid);
+            particleIds.delete(pid);
+            collected.push({ particleId: pid, playerId: player.playerId, score: player.score });
+
+            this._logEvent('particle_collected', {
+              playerId: player.playerId,
+              particleId: pid,
+              score: player.score,
+            });
+
+            // Instantly respawn a new particle elsewhere to maintain high density
+            if (this.isRunning) this._addParticle();
           }
-          
-          this.particles.delete(pid);
-          collected.push({ particleId: pid, playerId: player.playerId, score: player.score });
-
-          this._logEvent('particle_collected', {
-            playerId: player.playerId,
-            particleId: pid,
-            score: player.score,
-          });
-
-          // Instantly respawn a new particle elsewhere to maintain high density
-          if (this.isRunning) this._addParticle();
-          break;
         }
       }
     }
@@ -501,18 +529,12 @@ class GameRoom {
   // ── Broadcast Loops (Spatial Partitioning & Array Compression) ──
 
   _broadcastCombatTick(io) {
-    // 1. Group players into their Grid Cells
-    const { getCell } = require('./GridManager');
-    const cellsData = {};
+    const playersData = [];
     
     for (const p of this.players.values()) {
       if (!p.alive && !p.respawning) continue;
       
-      const cellId = getCell(p.x, p.y).id;
-      if (!cellsData[cellId]) cellsData[cellId] = [];
-      
-      // Pack Data: [socketId (substring for size?), x, y, angle, state, scale]
-      // Since socketId is string, we'll keep it but array is smaller than object
+      // Pack Data: [socketId, x, y, angle, state, scale]
       // state: 0=idle, 1=moving, 2=attacking, 3=boosting
       let state = 0;
       if (p.isBoosting) state = 3;
@@ -522,7 +544,7 @@ class GameRoom {
       const angle = Math.atan2(p.facingY || 0, p.facingX || 1);
       const scale = Math.min(1 + p.level * 0.04, 2.0);
 
-      cellsData[cellId].push([
+      playersData.push([
         p.socketId,
         Math.round(p.x),
         Math.round(p.y),
@@ -532,31 +554,28 @@ class GameRoom {
       ]);
     }
 
-    // 2. Broadcast to each grid room
-    for (const [cellId, data] of Object.entries(cellsData)) {
-      io.to(`room_${this.roomId}_grid_${cellId}`).emit('u', data); // 'u' = update
-    }
+    // Broadcast a single compressed array to everyone in the room
+    io.to(String(this.roomId)).emit('u', playersData);
   }
 
   _broadcastSlowData(io) {
+    const playersData = Array.from(this.players.values()).map(p => [
+      p.socketId,
+      p.score,
+      p.kills,
+      p.level,
+      p.xp,
+      p.alive ? 1 : 0,
+      p.respawning ? 1 : 0,
+    ]);
+
     // Top 10 Leaderboard
     const top10 = Array.from(this.players.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, 10)
       .map(p => [p.nickname, p.score, p.kills]);
 
-    // Minimap relative dots
-    const mapW = this.mapConfig.width;
-    const mapH = this.mapConfig.height;
-    const minimapDots = Array.from(this.players.values())
-      .filter(p => p.alive)
-      .map(p => [
-        p.socketId,
-        Math.round((p.x / mapW) * 100), // % X
-        Math.round((p.y / mapH) * 100), // % Y
-      ]);
-
-    io.to(String(this.roomId)).emit('slow_sync', { top: top10, map: minimapDots });
+    io.to(String(this.roomId)).emit('slow_sync', { players: playersData, top: top10 });
   }
 
   // ── Start / Stop ─────────────────────────────────────────────
