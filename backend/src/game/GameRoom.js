@@ -9,7 +9,6 @@ const logger = require('../utils/logger');
 
 const PLAYER_RADIUS = 16;
 const PARTICLE_RADIUS = 8;
-const ATTACK_COOLDOWN = 800;   // ms between attacks
 
 class GameRoom {
   constructor(roomId, roomCode, mapConfig) {
@@ -205,7 +204,7 @@ class GameRoom {
     if (!attacker || !attacker.alive || attacker.respawning) return null;
 
     const now = Date.now();
-    if (now - attacker.lastAttack < ATTACK_COOLDOWN) return null;
+    if (now - attacker.lastAttack < ENV.GAME.slashCooldownMs) return null;
     attacker.lastAttack = now;
 
     // Return empty array instead of null so caller knows attack happened (even if no hit)
@@ -315,8 +314,8 @@ class GameRoom {
         continue;
       }
 
-      // Hitbox radius scales with level (same as visual scale: 1.0x to 2.0x)
-      const scale = Math.min(1 + player.level * 0.04, 2.0);
+      // Hitbox radius scales with level
+      const scale = Math.min(1 + player.level * ENV.GAME.sizeIncreasePerLevel, ENV.GAME.maxPlayerSizeMultiplier);
       player.radius = 20 * scale;
 
       // Handle Boost XP Drain
@@ -480,7 +479,7 @@ class GameRoom {
       facingX: p.facingX,
       facingY: p.facingY,
       isBoosting: p.isBoosting,
-      scale: Math.min(1 + p.level * 0.04, 2.0),
+      scale: Math.min(1 + p.level * ENV.GAME.sizeIncreasePerLevel, ENV.GAME.maxPlayerSizeMultiplier),
       avatarUrl: p.avatarUrl,
       weaponUrl: p.weaponUrl,
       radius: p.radius,
@@ -523,7 +522,7 @@ class GameRoom {
       else if (p.dx || p.dy) state = 1;
       
       const angle = Math.atan2(p.facingY || 0, p.facingX || 1);
-      const scale = Math.min(1 + p.level * 0.04, 2.0);
+      const scale = Math.min(1 + p.level * ENV.GAME.sizeIncreasePerLevel, ENV.GAME.maxPlayerSizeMultiplier);
 
       cellsData[cellId].push([
         p.socketId,
