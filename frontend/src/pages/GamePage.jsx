@@ -1,12 +1,11 @@
 // src/pages/GamePage.jsx — Main game screen with responsive HUD and mobile support
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 import useAuthStore from '../store/authStore';
 import useSocket from '../hooks/useSocket';
 import GameCanvas from '../components/GameCanvas';
 import MobileControls from '../components/MobileControls';
-import { playSlashSound, playDeathSound } from '../utils/audio';
 
 export default function GamePage() {
   const { roomId } = useParams();
@@ -35,28 +34,10 @@ export default function GamePage() {
   const currentRoom = useGameStore((s) => s.currentRoom);
   const isHost = useGameStore((s) => s.isHost);
 
-  const { joinRoom, leaveRoom, sendReady, sendMove, sendAttack: socketSendAttack, socket } = useSocket();
+  const { joinRoom, leaveRoom, sendReady, sendMove, sendAttack } = useSocket();
   const hasJoined = useRef(false);
   const joystickRef = useRef({ dx: 0, dy: 0 });
   const [showMobileRankings, setShowMobileRankings] = useState(false);
-
-  const sendAttack = useCallback(() => {
-    socketSendAttack();
-    playSlashSound();
-  }, [socketSendAttack]);
-
-  // Handle local death sound
-  useEffect(() => {
-    if (socket) {
-      const handleDeathEvent = (data) => {
-        if (data.targetSocketId === socket.id) {
-          playDeathSound();
-        }
-      };
-      socket.on('player_died', handleDeathEvent);
-      return () => socket.off('player_died', handleDeathEvent);
-    }
-  }, [socket]);
 
   // Join room on mount
   useEffect(() => {
