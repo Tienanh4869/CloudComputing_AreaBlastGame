@@ -32,6 +32,18 @@ async function bootstrap() {
     logger.info('[DB] Models synced (alter)');
   }
 
+  // 2.5 Reset any stale rooms from 'playing' to 'waiting'
+  const { Room } = require('./models');
+  try {
+    const [updatedRows] = await Room.update(
+      { status: 'waiting' },
+      { where: { status: 'playing' } }
+    );
+    logger.info(`[DB] Reset ${updatedRows} stale room(s) to waiting status`);
+  } catch (err) {
+    logger.error(`[DB] Failed to reset stale rooms:`, err);
+  }
+
   // 3. Connect to Redis (optional, degrades gracefully)
   await connectRedis();
 

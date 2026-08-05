@@ -42,7 +42,9 @@ class GameRoom {
 
     // 1. Try up to 60 attempts to find a position inside safe zone & not in obstacle
     for (let attempt = 0; attempt < 60; attempt++) {
-      const maxDist = Math.max(20, radius * 0.8);
+      const maxDistX = this.mapConfig.width / 2;
+      const maxDistY = this.mapConfig.height / 2;
+      const maxDist = Math.min(radius, Math.min(maxDistX, maxDistY)) * 0.8;
       const r = Math.random() * maxDist;
       const angle = Math.random() * Math.PI * 2;
       

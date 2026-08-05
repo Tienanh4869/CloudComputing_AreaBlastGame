@@ -206,12 +206,11 @@ export const useSocket = () => {
       socket.emit('join_room', { roomId, roomCode, password });
     };
 
-    // If already connected, join immediately; else wait for connect
+    // If already connected, join immediately; else it will automatically join via the 'connect' event listener
     if (socket.connected) {
       doJoin();
     } else {
-      console.log('[Socket] Not connected yet, waiting...');
-      socket.once('connect', doJoin);
+      console.log('[Socket] Not connected yet, will join automatically upon connect...');
     }
 
     setMatchStatus('waiting');
