@@ -478,10 +478,8 @@ const initSocket = (io) => {
 
         const { collected, spawned } = gameRoom.tick();
 
-        // Broadcast full game state to all players individually (for Fog of War / Bushes)
-        for (const player of gameRoom.players.values()) {
-          io.to(player.socketId).emit('game_state', gameRoom.getStateFor(player.socketId));
-        }
+        // Broadcast full game state to the entire room at once (massively reduces Azure REST API calls)
+        io.to(String(roomId)).emit('game_state', gameRoom.getStateFor(null));
 
         // Emit particle events
         if (collected && collected.length > 0) {
