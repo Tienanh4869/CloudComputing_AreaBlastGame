@@ -163,7 +163,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       const now = performance.now();
       const moved = Math.abs(dx - lastMoveRef.current.dx) > 0.02 || Math.abs(dy - lastMoveRef.current.dy) > 0.02 || currentBoosting !== lastMoveRef.current.isBoosting;
       const isMoving = Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01;
-      const shouldResend = (isMoving || currentBoosting) && (now - lastMoveRef.current.lastSent > 33);
+      const shouldResend = (isMoving || currentBoosting) && (now - lastMoveRef.current.lastSent > 120);
 
       // Send movement heading to server
       if (moved || shouldResend) {
