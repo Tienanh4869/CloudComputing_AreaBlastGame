@@ -136,18 +136,71 @@ app.serviceBusQueue('matchResultsProcessor', {
     connection: 'SERVICE_BUS_DAILY',
     queueName: 'match-results',
     handler: async (message, context) => {
-        context.log('[Worker] Nhận dữ liệu kết thúc trận từ Service Bus:', message);
-        
+        context.log(
+            '[Worker] Nhận dữ liệu kết thúc trận từ Service Bus:',
+            message
+        );
+
+        const {
+            event,
+            eventId,
+            matchId,
+            playerId,
+            score,
+            kills,
+            deaths,
+            rank
+        } = message;
+
+        if (
+            event !== 'match_ended' ||
+            !matchId ||
+            !playerId
+        ) {
+            context.warn('[Worker] Message kết quả trận không hợp lệ');
+            return;
+        }
+
+        const processedEventId =
+            eventId || `MATCH_RESULT:${matchId}:${playerId}`;
+
+        const client = await pool.connect();
+
         try {
-            const { event, playerId, score, kills, deaths, rank } = message;
-            
-            if (event === 'match_ended' && playerId) {
-                const isWin = rank === 1 ? 1 : 0;
-                const isLoss = rank !== 1 ? 1 : 0;
-                
-                const query = `
-                    UPDATE players 
-                    SET 
+            await client.query('BEGIN');
+
+            const processedResult = await client.query(
+                `
+                    INSERT INTO processed_events (
+                        event_id,
+                        event_type,
+                        processed_at
+                    )
+                    VALUES ($1, 'MATCH_RESULT', NOW())
+                    ON CONFLICT (event_id)
+                    DO NOTHING
+                    RETURNING event_id
+                `,
+                [processedEventId]
+            );
+
+            if (processedResult.rowCount === 0) {
+                await client.query('ROLLBACK');
+
+                context.log(
+                    `[Worker] Bỏ qua sự kiện đã xử lý: ${processedEventId}`
+                );
+
+                return;
+            }
+
+            const isWin = Number(rank) === 1 ? 1 : 0;
+            const isLoss = Number(rank) > 1 ? 1 : 0;
+
+            await client.query(
+                `
+                    UPDATE players
+                    SET
                         total_score = COALESCE(total_score, 0) + $1,
                         kills = COALESCE(kills, 0) + $2,
                         deaths = COALESCE(deaths, 0) + $3,
@@ -155,17 +208,28 @@ app.serviceBusQueue('matchResultsProcessor', {
                         losses = COALESCE(losses, 0) + $5,
                         updated_at = NOW()
                     WHERE id = $6
-                `;
-                await pool.query(query, [score, kills, deaths, isWin, isLoss, playerId]);
-                context.log(`[Worker] Cập nhật thành công điểm cho Player ${playerId}`);
-            }
-        } catch (err) {
-            context.error(
-                '[Worker] Lỗi xử lý message:',
-                err
+                `,
+                [
+                    Number(score) || 0,
+                    Number(kills) || 0,
+                    Number(deaths) || 0,
+                    isWin,
+                    isLoss,
+                    playerId
+                ]
             );
 
+            await client.query('COMMIT');
+
+            context.log(
+                `[Worker] Đã cộng điểm trận cho Player ${playerId}`
+            );
+        } catch (err) {
+            await client.query('ROLLBACK');
+            context.error('[Worker] Lỗi xử lý kết quả trận:', err);
             throw err;
+        } finally {
+            client.release();
         }
     }
 });

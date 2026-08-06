@@ -543,31 +543,31 @@ const initSocket = (io) => {
           { where: { match_id: match.id, player_id: ranking.playerId } }
         );
 
-        const isWin = ranking.rank === 1 ? 1 : 0;
-        const isLoss = ranking.rank > 1 ? 1 : 0;
+        // const isWin = ranking.rank === 1 ? 1 : 0;
+        // const isLoss = ranking.rank > 1 ? 1 : 0;
 
-        await Player.increment({
-          total_score: ranking.score || 0,
-          kills: ranking.kills || 0,
-          deaths: ranking.deaths || 0,
-          wins: isWin,
-          losses: isLoss,
-        }, { where: { id: ranking.playerId } }).catch((err) => {
-          logger.error('[Socket] Failed to increment player stats', err);
-        });
+        // await Player.increment({
+        //   total_score: ranking.score || 0,
+        //   kills: ranking.kills || 0,
+        //   deaths: ranking.deaths || 0,
+        //   wins: isWin,
+        //   losses: isLoss,
+        // }, { where: { id: ranking.playerId } }).catch((err) => {
+        //   logger.error('[Socket] Failed to increment player stats', err);
+        // });
 
         // Also update leaderboard_scores for all_time
-        try {
-          const lb = await LeaderboardScore.findOne({
-            where: { player_id: ranking.playerId, period: 'all_time' },
-          });
-          if (lb) {
-            await lb.increment({
-              score: ranking.score || 0,
-              kills: ranking.kills || 0,
-            });
-          }
-        } catch (e) {}
+        // try {
+        //   const lb = await LeaderboardScore.findOne({
+        //     where: { player_id: ranking.playerId, period: 'all_time' },
+        //   });
+        //   if (lb) {
+        //     await lb.increment({
+        //       score: ranking.score || 0,
+        //       kills: ranking.kills || 0,
+        //     });
+        //   }
+        // } catch (e) {}
       }
 
       // Save event log to DB
@@ -611,11 +611,13 @@ const initSocket = (io) => {
         const messages = results.rankings.map(ranking => ({
           body: {
             event: 'match_ended',
+            eventId: `MATCH_RESULT:${match.id}:${ranking.playerId}`,
+            matchId: match.id,
             playerId: ranking.playerId,
             score: ranking.score,
             kills: ranking.kills,
             deaths: ranking.deaths,
-            rank: ranking.rank
+            rank: ranking.rank,
           }
         }));
         try {
@@ -632,6 +634,8 @@ const initSocket = (io) => {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
+                eventId: `MATCH_RESULT:${match.id}:${ranking.playerId}`,
+                matchId: match.id,
                 event: 'match_ended',
                 playerId: ranking.playerId,
                 score: ranking.score,
