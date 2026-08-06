@@ -381,7 +381,9 @@ const initSocket = (io) => {
     // ── join_quick_match ─────────────────────────────────────────
     socket.on('join_quick_match', async () => {
       // Get IP and use Azure Maps to get Region
-      const ip = socket.handshake.headers['x-forwarded-for']?.split(',')[0] || socket.handshake.address;
+      let xff = socket.handshake.headers['x-forwarded-for'];
+      if (Array.isArray(xff)) xff = xff[0];
+      const ip = (xff?.split(',')[0]) || socket.handshake.address;
       const region = await getCountryFromIp(ip);
 
       await Matchmaker.join({
