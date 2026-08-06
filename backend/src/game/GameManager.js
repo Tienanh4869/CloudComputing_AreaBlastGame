@@ -101,8 +101,14 @@ const GameManager = {
         // Deep clone existing theme to ensure complete room isolation
         mapConfig.theme = JSON.parse(JSON.stringify(mapConfig.theme));
       }
-      mapConfig.theme.obstacles = obstacles;
-      mapConfig.theme.bushes = bushes;
+      
+      // Chỉ tự động tạo địa hình nếu file JSON trên Blob không có chướng ngại vật
+      if (!mapConfig.theme.obstacles) {
+        mapConfig.theme.obstacles = obstacles;
+      }
+      if (!mapConfig.theme.bushes) {
+        mapConfig.theme.bushes = bushes;
+      }
 
       const room = new GameRoom(roomId, roomCode, mapConfig);
       activeRooms.set(roomId, room);
