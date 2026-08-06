@@ -39,7 +39,8 @@ export const useSocket = () => {
 
     const socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      // Azure Web PubSub requires HTTP Polling first to intercept and return the cloud endpoint
+      transports: ['polling', 'websocket'],
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     });
