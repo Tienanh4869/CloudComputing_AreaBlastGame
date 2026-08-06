@@ -16,6 +16,7 @@ class GameRoom {
     this.roomCode = roomCode;
     this.mapConfig = mapConfig;
     this.players = new Map();      // socketId → player state
+    this.departedPlayers = new Map();
     this.particles = new Map();    // particleId → particle state
     this.isRunning = false;
     this.tickInterval = null;
@@ -171,10 +172,24 @@ class GameRoom {
 
   removePlayer(socketId) {
     const player = this.players.get(socketId);
-    this.players.delete(socketId);
-    if (player) {
-      logger.gameEvent('player_left', { roomId: this.roomId, nickname: player.nickname });
+
+    if (player && this.isRunning) {
+      const participantKey = player.playerId || socketId;
+
+      this.departedPlayers.set(participantKey, {
+        ...player,
+      });
     }
+
+    this.players.delete(socketId);
+
+    if (player) {
+      logger.gameEvent('player_left', {
+        roomId: this.roomId,
+        nickname: player.nickname,
+      });
+    }
+
     return player;
   }
 
@@ -564,6 +579,7 @@ class GameRoom {
   // ── Start / Stop ─────────────────────────────────────────────
 
   start(matchId) {
+    this.departedPlayers.clear();
     this.matchId = matchId;
     this.isRunning = true;
     this.startedAt = Date.now();
@@ -588,7 +604,17 @@ class GameRoom {
   // ── Results ──────────────────────────────────────────────────
 
   getResults() {
-    const rankings = Array.from(this.players.values())
+    const participants = new Map();
+
+    for (const player of this.departedPlayers.values()) {
+      participants.set(player.playerId || player.socketId, player);
+    }
+
+    for (const player of this.players.values()) {
+      participants.set(player.playerId || player.socketId, player);
+    }
+
+    const rankings = Array.from(participants.values())
       .sort((a, b) => b.score - a.score)
       .map((p, i) => ({
         playerId: p.playerId,
