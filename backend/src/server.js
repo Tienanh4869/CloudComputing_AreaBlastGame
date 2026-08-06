@@ -40,7 +40,7 @@ async function bootstrap() {
 
   const io = new SocketServer(httpServer, {
     cors: {
-      origin: CORS_ORIGIN,
+      origin: true, // Dynamically reflect origin to prevent CORS blocking during polling
       methods: ['GET', 'POST'],
       credentials: true,
     },
