@@ -77,7 +77,7 @@ class GameRoom {
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
-    const totalParticles = this.isQuickMatch ? 30 : GAME.particleCount;
+    const totalParticles = GAME.particleCount;
     while (this.particles.size < totalParticles) {
       this._addParticle();
     }
