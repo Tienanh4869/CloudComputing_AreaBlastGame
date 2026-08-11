@@ -11,7 +11,7 @@ const PLAYER_RADIUS = 16;
 const PARTICLE_RADIUS = 8;
 
 class GameRoom {
-  constructor(roomId, roomCode, mapConfig) {
+  constructor(roomId, roomCode, mapConfig, options = {}) {
     this.roomId = roomId;
     this.roomCode = roomCode;
     this.mapConfig = mapConfig;
@@ -20,9 +20,12 @@ class GameRoom {
     this.particles = new Map();    // particleId → particle state
     this.isRunning = false;
     this.tickInterval = null;
+    this.playtimeInterval = null;
+    this.isEnding = false;
     this.startedAt = null;
     this.matchId = null;
     this.eventLog = [];            // In-memory event log
+    this.isQuickMatch = Boolean(options.isQuickMatch);
 
     // Pre-generate particles
     this._spawnParticles();
@@ -74,7 +77,7 @@ class GameRoom {
   // ── Particle Management ──────────────────────────────────────
 
   _spawnParticles() {
-    const totalParticles = this.isQuickMatch ? 30 : 750; 
+    const totalParticles = this.isQuickMatch ? 30 : GAME.particleCount;
     while (this.particles.size < totalParticles) {
       this._addParticle();
     }
@@ -140,6 +143,11 @@ class GameRoom {
 
   addPlayer(socketId, playerData) {
     const pos = this._getRandomSafeSpawnPosition();
+    const participantKey = playerData.playerId || socketId;
+    const previous = this.isRunning
+      ? this.departedPlayers.get(participantKey)
+      : null;
+    const now = Date.now();
     const player = {
       socketId,
       playerId: playerData.playerId,
@@ -153,9 +161,9 @@ class GameRoom {
       level: 1,
       xp: 0,
       maxXp: 10,
-      score: 0,
-      kills: 0,
-      deaths: 0,
+      score: Number(previous?.score) || 0,
+      kills: Number(previous?.kills) || 0,
+      deaths: Number(previous?.deaths) || 0,
       alive: true,
       lastAttack: 0,
       dx: 0,
@@ -164,7 +172,18 @@ class GameRoom {
       facingY: 0,
       isBoosting: false,
       inBushId: null,
+
+      // Người có mặt trước khi trận bắt đầu sẽ được gán lại tại start().
+      // Người vào giữa trận bắt đầu tính thời gian ngay lúc này.
+      joinedAt: previous?.joinedAt || (this.isRunning ? now : null),
+      sessionStartedAt: this.isRunning ? now : null,
+      playtimeSeconds: Number(previous?.playtimeSeconds) || 0,
+      playtimeReportedSeconds:
+        Number(previous?.playtimeReportedSeconds) || 0,
+      leftAt: null,
     };
+
+    this.departedPlayers.delete(participantKey);
     this.players.set(socketId, player);
     logger.gameEvent('player_joined', { roomId: this.roomId, nickname: playerData.nickname, x: pos.x, y: pos.y });
     return player;
@@ -175,9 +194,17 @@ class GameRoom {
 
     if (player && this.isRunning) {
       const participantKey = player.playerId || socketId;
+      const leftAt = Date.now();
+      const playtimeSeconds = this.getPlayerPlaytimeSeconds(
+        player,
+        leftAt
+      );
 
       this.departedPlayers.set(participantKey, {
         ...player,
+        playtimeSeconds,
+        sessionStartedAt: null,
+        leftAt,
       });
     }
 
@@ -195,6 +222,25 @@ class GameRoom {
 
   getPlayerCount() {
     return this.players.size;
+  }
+
+  getPlayerPlaytimeSeconds(player, at = Date.now()) {
+    if (!player) return 0;
+
+    const accumulated = Math.max(
+      0,
+      Number(player.playtimeSeconds) || 0
+    );
+    const sessionStartedAt = Number(player.sessionStartedAt);
+
+    if (!this.isRunning || !sessionStartedAt) {
+      return accumulated;
+    }
+
+    return accumulated + Math.max(
+      0,
+      Math.floor((Number(at) - sessionStartedAt) / 1000)
+    );
   }
 
   // ── Input Handling ───────────────────────────────────────────
@@ -582,9 +628,19 @@ class GameRoom {
     this.departedPlayers.clear();
     this.matchId = matchId;
     this.isRunning = true;
+    this.isEnding = false;
     this.startedAt = Date.now();
-    this.matchDuration = 4 * 60 * 1000; // 4 minutes
+    this.matchDuration = 4 * 60 * 1000;
     this.tickCount = 0;
+
+    // Những người đã có mặt được tính thời gian từ lúc trận bắt đầu.
+    for (const player of this.players.values()) {
+      player.joinedAt = this.startedAt;
+      player.sessionStartedAt = this.startedAt;
+      player.playtimeSeconds = 0;
+      player.playtimeReportedSeconds = 0;
+      player.leftAt = null;
+    }
 
     this._logEvent('match_started', { matchId });
     logger.gameEvent('match_started', { roomId: this.roomId, matchId });
@@ -595,6 +651,10 @@ class GameRoom {
     if (this.tickInterval) {
       clearInterval(this.tickInterval);
       this.tickInterval = null;
+    }
+    if (this.playtimeInterval) {
+      clearInterval(this.playtimeInterval);
+      this.playtimeInterval = null;
     }
     this._logEvent('match_ended', {
       duration: Math.floor((Date.now() - this.startedAt) / 1000),
@@ -614,16 +674,41 @@ class GameRoom {
       participants.set(player.playerId || player.socketId, player);
     }
 
+    const endedAt = Date.now();
+
     const rankings = Array.from(participants.values())
       .sort((a, b) => b.score - a.score)
-      .map((p, i) => ({
-        playerId: p.playerId,
-        nickname: p.nickname,
-        score: p.score,
-        kills: p.kills,
-        deaths: p.deaths,
-        rank: i + 1,
-      }));
+      .map((p, i) => {
+        const joinedAt = Math.max(
+          Number(p.joinedAt) || this.startedAt,
+          this.startedAt
+        );
+
+        const leftAt = Math.min(
+          Number(p.leftAt) || endedAt,
+          endedAt
+        );
+
+        const playtimeSeconds = p.sessionStartedAt
+          ? this.getPlayerPlaytimeSeconds(p, leftAt)
+          : Math.max(0, Number(p.playtimeSeconds) || 0);
+
+        return {
+          playerId: p.playerId,
+          nickname: p.nickname,
+          score: p.score,
+          kills: p.kills,
+          deaths: p.deaths,
+          rank: i + 1,
+          joinedAt,
+          leftAt,
+          playtimeSeconds,
+          playtimeReportedSeconds: Math.max(
+            0,
+            Number(p.playtimeReportedSeconds) || 0
+          ),
+        };
+      });
 
     return {
       rankings,

@@ -10,7 +10,9 @@ const logger = require('../utils/logger');
 const { BlobServiceClient } = require('@azure/storage-blob');
 const ENV = require('../config/env');
 const { moderateImage } = require('../services/imageModeration');
-const { publishGameEvent } = require('../config/serviceBus');
+const {
+  recordDailyQuestEvent,
+} = require('../services/dailyQuestService');
 const { getQuestDate } = require('../utils/dailyQuests');
 
 const ALLOWED_UPLOAD_TYPES = new Set(['avatar_url', 'weapon_url']);
@@ -20,6 +22,25 @@ const IMAGE_FORMATS = {
   png: { contentType: 'image/png', extension: 'png' },
   webp: { contentType: 'image/webp', extension: 'webp' },
 };
+
+async function recordLoginQuest(player) {
+  if (!player) return;
+
+  try {
+    await recordDailyQuestEvent({
+      schemaVersion: 1,
+      eventId: `LOGIN:${player.id}:${getQuestDate()}`,
+      eventType: 'PLAYER_LOGIN',
+      occurredAt: new Date().toISOString(),
+      playerId: player.id,
+    });
+  } catch (eventError) {
+    logger.warn('[DailyQuest] Failed to record login event', {
+      error: eventError.message,
+      playerId: player.id,
+    });
+  }
+}
 
 // Input validation rules
 const registerRules = [
@@ -72,6 +93,10 @@ router.post('/register', registerRules, async (req, res, next) => {
     const token = signToken(user.id);
 
     logger.info('[Auth] New user registered', { username, userId: user.id });
+
+    // Registration signs the player in immediately, so it also counts as the
+    // daily login quest. The deterministic eventId prevents duplicate rewards.
+    await recordLoginQuest(player);
     
     if (ENV.LOGIC_APP_WEBHOOK_URL) {
       fetch(ENV.LOGIC_APP_WEBHOOK_URL, {
@@ -116,25 +141,7 @@ router.post('/login', loginRules, async (req, res, next) => {
     const token = signToken(user.id);
     logger.info('[Auth] User logged in', { username, userId: user.id });
 
-    if (player) {
-      try {
-        await publishGameEvent({
-          schemaVersion: 1,
-          eventId: `LOGIN:${player.id}:${getQuestDate()}`,
-          eventType: 'PLAYER_LOGIN',
-          occurredAt: new Date().toISOString(),
-          playerId: player.id,
-        });
-      } catch (eventError) {
-        logger.warn(
-          '[DailyQuest] Failed to publish login event',
-          {
-            error: eventError.message,
-            playerId: player.id,
-          }
-        );
-      }
-    }
+    await recordLoginQuest(player);
     res.json({
       message: 'Login successful',
       token,

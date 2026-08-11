@@ -22,7 +22,7 @@ const GameManager = {
   /**
    * Create or return existing game room.
    */
-  async getOrCreate(rawRoomId, roomCode) {
+  async getOrCreate(rawRoomId, roomCode, options = {}) {
     const roomId = String(rawRoomId);
     // 1. If room exists, return immediately
     if (activeRooms.has(roomId)) {
@@ -104,7 +104,7 @@ const GameManager = {
       mapConfig.theme.obstacles = obstacles;
       mapConfig.theme.bushes = bushes;
 
-      const room = new GameRoom(roomId, roomCode, mapConfig);
+      const room = new GameRoom(roomId, roomCode, mapConfig, options);
       activeRooms.set(roomId, room);
       pendingRooms.delete(roomId);
       logger.info('[GameManager] Room created with procedural terrain', { 

@@ -41,7 +41,47 @@ function getQuestDate(date = new Date()) {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+/**
+ * Convert a gameplay event into one daily-quest increment.
+ * This mapping is shared by the backend write-through path. Azure Functions
+ * keeps the same mapping so queued events remain a reliable fallback.
+ */
+function getQuestUpdate(event) {
+  switch (event?.eventType) {
+    case 'PLAYER_LOGIN':
+      return {
+        questCode: 'DAILY_LOGIN',
+        amount: 1,
+        target: 1,
+        unit: 'times',
+        reward: 100,
+      };
+
+    case 'PLAYER_KILL':
+      return {
+        questCode: 'DAILY_KILL_5',
+        amount: 1,
+        target: 5,
+        unit: 'kills',
+        reward: 200,
+      };
+
+    case 'PLAYTIME_RECORDED':
+      return {
+        questCode: 'DAILY_PLAY_30_MIN',
+        amount: Math.max(0, Math.floor(Number(event.durationSeconds) || 0)),
+        target: 1800,
+        unit: 'seconds',
+        reward: 300,
+      };
+
+    default:
+      return null;
+  }
+}
+
 module.exports = {
   QUEST_DEFINITIONS,
   getQuestDate,
+  getQuestUpdate,
 };

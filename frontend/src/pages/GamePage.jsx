@@ -7,6 +7,21 @@ import useSocket from '../hooks/useSocket';
 import GameCanvas from '../components/GameCanvas';
 import MobileControls from '../components/MobileControls';
 
+function samePlayerRoster(previous = [], next = []) {
+  if (previous === next) return true;
+  if (previous.length !== next.length) return false;
+
+  return previous.every((player, index) => {
+    const other = next[index];
+
+    return (
+      player.socketId === other.socketId &&
+      player.nickname === other.nickname &&
+      player.color === other.color
+    );
+  });
+}
+
 export default function GamePage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -30,7 +45,10 @@ export default function GamePage() {
   const matchLeaderboard = useGameStore((s) => s.matchLeaderboard);
   const killFeed = useGameStore((s) => s.killFeed);
   const matchResults = useGameStore((s) => s.matchResults);
-  const players = useGameStore((s) => s.players);
+  const players = useGameStore(
+    (state) => state.players,
+    samePlayerRoster
+  );
   const currentRoom = useGameStore((s) => s.currentRoom);
   const isHost = useGameStore((s) => s.isHost);
 
@@ -74,9 +92,7 @@ export default function GamePage() {
 
   const xpPercent = myMaxXp > 0 ? (myXp / myMaxXp) * 100 : 0;
 
-  const liveRankings = matchLeaderboard.length > 0
-    ? matchLeaderboard
-    : players.slice().sort((a, b) => b.score - a.score);
+  const liveRankings = matchLeaderboard;
 
   const [isFullscreen, setIsFullscreen] = useState(false);
 

@@ -9,7 +9,9 @@ const { metrics, increment, decrement } = require('../utils/metrics');
 const logger = require('../utils/logger');
 const { ServiceBusClient } = require('@azure/service-bus');
 const { v4: uuidv4 } = require('uuid');
-const { publishGameEvent } = require('../config/serviceBus');
+const {
+  recordDailyQuestEvent,
+} = require('../services/dailyQuestService');
 const { getCountryFromIp } = require('../services/mapsService');
 
 // Init Service Bus Client (if configured)
@@ -25,6 +27,86 @@ const { getCountryFromIp } = require('../services/mapsService');
 
 // Service Bus sender được khởi tạo sau khi Key Vault đã tải secret.
 let sbSender = null;
+
+async function recordPlayerPlaytimeUnlocked(gameRoom, player, reason) {
+  if (!gameRoom?.matchId || !player?.playerId) return 0;
+
+  const totalSeconds = player.sessionStartedAt
+    ? gameRoom.getPlayerPlaytimeSeconds(player)
+    : Math.max(0, Number(player.playtimeSeconds) || 0);
+  const reportedSeconds = Math.max(
+    0,
+    Number(player.playtimeReportedSeconds) || 0
+  );
+  const deltaSeconds = Math.max(0, totalSeconds - reportedSeconds);
+
+  if (deltaSeconds <= 0) return 0;
+
+  await recordDailyQuestEvent({
+    schemaVersion: 1,
+    eventId:
+      `PLAYTIME:${gameRoom.matchId}:${player.playerId}:`
+      + `${reportedSeconds}:${totalSeconds}`,
+    eventType: 'PLAYTIME_RECORDED',
+    occurredAt: new Date().toISOString(),
+    matchId: gameRoom.matchId,
+    playerId: player.playerId,
+    durationSeconds: deltaSeconds,
+    reason,
+  });
+
+  player.playtimeReportedSeconds = totalSeconds;
+  return deltaSeconds;
+}
+
+async function recordPlayerPlaytime(gameRoom, player, reason) {
+  if (!player) return 0;
+
+  const previousTask = player.playtimeRecordPromise || Promise.resolve();
+  const currentTask = previousTask
+    .catch(() => {})
+    .then(() => recordPlayerPlaytimeUnlocked(gameRoom, player, reason));
+
+  player.playtimeRecordPromise = currentTask;
+
+  try {
+    return await currentTask;
+  } finally {
+    if (player.playtimeRecordPromise === currentTask) {
+      player.playtimeRecordPromise = null;
+    }
+  }
+}
+
+async function persistMatchParticipant(gameRoom, participant) {
+  if (!gameRoom?.matchId || !participant?.playerId) return null;
+
+  const [matchPlayer] = await MatchPlayer.findOrCreate({
+    where: {
+      match_id: gameRoom.matchId,
+      player_id: participant.playerId,
+    },
+    defaults: {
+      joined_at: new Date(
+        participant.joinedAt || gameRoom.startedAt || Date.now()
+      ),
+    },
+  });
+
+  await matchPlayer.update({
+    score: Math.max(0, Math.floor(Number(participant.score) || 0)),
+    kills: Math.max(0, Math.floor(Number(participant.kills) || 0)),
+    deaths: Math.max(0, Math.floor(Number(participant.deaths) || 0)),
+    ...(participant.rank
+      ? { rank: Math.max(1, Math.floor(Number(participant.rank))) }
+      : {}),
+    ...(participant.leftAt
+      ? { left_at: new Date(participant.leftAt) }
+      : {}),
+  });
+
+  return matchPlayer;
+}
 /**
  * Initialize Socket.IO event handlers.
  * Attaches to an existing Socket.IO server instance.
@@ -103,10 +185,15 @@ const initSocket = (io) => {
         socket.latestRequestedRoomId = roomId;
 
         // Get or create in-memory game room (this is async and may take time)
-        const gameRoom = await GameManager.getOrCreate(roomId, roomCode || room.code);
-        if (room.name.startsWith('Quick Match ')) {
-           gameRoom.isQuickMatch = true;
-        }
+        const isQuickMatch = room.name.startsWith('Quick Match ');
+        const gameRoom = await GameManager.getOrCreate(
+          roomId,
+          roomCode || room.code,
+          { isQuickMatch }
+        );
+
+        // Keep existing in-memory rooms consistent with the database room type.
+        gameRoom.isQuickMatch = isQuickMatch;
 
         // If the user clicked join on ANOTHER room while we were waiting, ABORT this stale request!
         if (socket.latestRequestedRoomId !== roomId) {
@@ -151,6 +238,37 @@ const initSocket = (io) => {
           avatarUrl: socket.avatarUrl,
           weaponUrl: socket.weaponUrl,
         });
+
+        // A player joining after the match started must also be persisted.
+        // Without this record, their score and match history are lost.
+        if (
+          gameRoom.isRunning &&
+          gameRoom.matchId &&
+          socket.playerId
+        ) {
+          try {
+            const [, created] = await MatchPlayer.findOrCreate({
+              where: {
+                match_id: gameRoom.matchId,
+                player_id: socket.playerId,
+              },
+              defaults: {
+                joined_at: new Date(playerState.joinedAt || Date.now()),
+              },
+            });
+
+            if (created) {
+              await Match.increment('player_count', {
+                where: { id: gameRoom.matchId },
+              });
+            }
+          } catch (matchPlayerError) {
+            logger.error(
+              '[LateJoin] Failed to create MatchPlayer:',
+              matchPlayerError.message
+            );
+          }
+        }
 
         // Update room player count
         await room.increment('player_count');
@@ -334,7 +452,7 @@ const initSocket = (io) => {
             targetNickname: hit.target.nickname,
           });
           if (socket.playerId && gameRoom.matchId) {
-            publishGameEvent({
+            recordDailyQuestEvent({
               schemaVersion: 1,
               eventId: uuidv4(),
               eventType: 'PLAYER_KILL',
@@ -500,6 +618,25 @@ const initSocket = (io) => {
         }
       }, tickMs);
 
+      // Record playtime while the player is still in the match. This makes
+      // quest progress visible without waiting for leave/end-match and also
+      // protects the accumulated time if the container restarts unexpectedly.
+      gameRoom.playtimeInterval = setInterval(() => {
+        if (!gameRoom.isRunning || gameRoom.isEnding) return;
+
+        for (const player of gameRoom.players.values()) {
+          recordPlayerPlaytime(gameRoom, player, 'heartbeat').catch(
+            (eventError) => {
+              logger.warn('[DailyQuest] Playtime heartbeat failed', {
+                error: eventError.message,
+                playerId: player.playerId,
+                matchId: gameRoom.matchId,
+              });
+            }
+          );
+        }
+      }, 10000);
+
       // Auto-end match after configured duration
       setTimeout(() => endMatch(io, roomId, gameRoom), gameRoom.matchDuration);
 
@@ -513,7 +650,17 @@ const initSocket = (io) => {
    * End the match: save results to DB, update leaderboard.
    */
   async function endMatch(io, roomId, gameRoom) {
-    if (!gameRoom.isRunning) return;
+    if (!gameRoom.isRunning || gameRoom.isEnding) return;
+
+    gameRoom.isEnding = true;
+
+    // Let an in-flight heartbeat finish before taking the final snapshot.
+    // Otherwise the heartbeat and match-end flush could count overlapping time.
+    await Promise.allSettled(
+      Array.from(gameRoom.players.values())
+        .map((player) => player.playtimeRecordPromise)
+        .filter(Boolean)
+    );
 
     const results = gameRoom.getResults();
     gameRoom.stop();
@@ -538,10 +685,7 @@ const initSocket = (io) => {
       // Update match_players stats & directly increment Player profile stats
       for (const ranking of results.rankings) {
         if (!ranking.playerId) continue;
-        await MatchPlayer.update(
-          { score: ranking.score, kills: ranking.kills, deaths: ranking.deaths, rank: ranking.rank },
-          { where: { match_id: match.id, player_id: ranking.playerId } }
-        );
+        await persistMatchParticipant(gameRoom, ranking);
 
         // const isWin = ranking.rank === 1 ? 1 : 0;
         // const isLoss = ranking.rank > 1 ? 1 : 0;
@@ -579,33 +723,11 @@ const initSocket = (io) => {
 
 
       // Gửi thời gian chơi của từng người để cập nhật nhiệm vụ hằng ngày
-      const playtimeSeconds = Math.max(
-        0,
-        Number(results.duration) || 0
+      await Promise.allSettled(
+        results.rankings.map((ranking) =>
+          recordPlayerPlaytime(gameRoom, ranking, 'match_end')
+        )
       );
-
-      for (const ranking of results.rankings) {
-        if (!ranking.playerId) continue;
-
-        publishGameEvent({
-          schemaVersion: 1,
-          eventId: `PLAYTIME:${match.id}:${ranking.playerId}`,
-          eventType: 'PLAYTIME_RECORDED',
-          occurredAt: new Date().toISOString(),
-          matchId: match.id,
-          playerId: ranking.playerId,
-          durationSeconds: playtimeSeconds,
-        }).catch((eventError) => {
-          logger.warn(
-            '[DailyQuest] Failed to publish playtime event',
-            {
-              error: eventError.message,
-              playerId: ranking.playerId,
-              matchId: match.id,
-            }
-          );
-        });
-      }
       // Gửi kết quả lên Azure Service Bus để Function (Worker) tính toán bảng xếp hạng bất đồng bộ
       if (sbSender) {
         const messages = results.rankings.map(ranking => ({
@@ -687,21 +809,12 @@ const initSocket = (io) => {
         gameRoom.matchId &&
         gameRoom.startedAt
       ) {
-        const playtimeSeconds = Math.max(
-          0,
-          Math.floor((Date.now() - gameRoom.startedAt) / 1000)
-        );
-
         try {
-          await publishGameEvent({
-            schemaVersion: 1,
-            eventId: `PLAYTIME:${gameRoom.matchId}:${leavingPlayer.playerId}`,
-            eventType: 'PLAYTIME_RECORDED',
-            occurredAt: new Date().toISOString(),
-            matchId: gameRoom.matchId,
-            playerId: leavingPlayer.playerId,
-            durationSeconds: playtimeSeconds,
-          });
+          await recordPlayerPlaytime(
+            gameRoom,
+            leavingPlayer,
+            'player_leave'
+          );
         } catch (eventError) {
           logger.warn(
             '[DailyQuest] Failed to publish leave playtime event',
@@ -716,6 +829,26 @@ const initSocket = (io) => {
 
       // Chỉ xóa người chơi sau khi đã gửi sự kiện thời gian
       gameRoom.removePlayer(socket.id);
+
+      // Save score/history immediately for players who leave before the room
+      // finishes. endMatch safely updates the same row again with final rank.
+      if (gameRoom.isRunning && leavingPlayer?.playerId) {
+        const participant = gameRoom.departedPlayers.get(
+          leavingPlayer.playerId
+        );
+
+        if (participant) {
+          try {
+            await persistMatchParticipant(gameRoom, participant);
+          } catch (persistError) {
+            logger.error('[Match] Failed to persist leaving player', {
+              error: persistError.message,
+              playerId: leavingPlayer.playerId,
+              matchId: gameRoom.matchId,
+            });
+          }
+        }
+      }
 
       // Update DB player count
       try {
