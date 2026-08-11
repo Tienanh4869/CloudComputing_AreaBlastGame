@@ -1,4 +1,4 @@
-// src/game/Matchmaker.js - Quick Match queue handling (Min 4, Max 8 players with Memory Fallback)
+// src/game/Matchmaker.js - Quick Match queue handling (Min 4, Max 20 players with Memory Fallback)
 const { getRedis } = require('../config/redis');
 const { Room } = require('../models');
 const { generateRoomCode } = require('../utils/helpers');
@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 
 const QUEUE_KEY = 'qm_queue';
 const MIN_PLAYERS = 1; // Changed to 1 for testing Geo-Matchmaking
-const MAX_PLAYERS = 8;
+const MAX_PLAYERS = 20;
 const MIN_WAIT_TIMEOUT_MS = 6000; // 6s wait time once min 4 players reached before launching match
 const TICK_RATE = 1000; // Check every 1s for responsive matchmaking
 
@@ -199,7 +199,7 @@ class Matchmaker {
       let playersToLaunch = 0;
 
       if (count >= MAX_PLAYERS) {
-        // Max 8 players reached -> Launch immediately!
+        // Max 20 players reached -> Launch immediately!
         shouldLaunch = true;
         playersToLaunch = MAX_PLAYERS;
       } else if (count >= MIN_PLAYERS) {
