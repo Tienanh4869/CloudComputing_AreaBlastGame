@@ -103,10 +103,15 @@ const initSocket = (io) => {
         socket.latestRequestedRoomId = roomId;
 
         // Get or create in-memory game room (this is async and may take time)
-        const gameRoom = await GameManager.getOrCreate(roomId, roomCode || room.code);
-        if (room.name.startsWith('Quick Match ')) {
-           gameRoom.isQuickMatch = true;
-        }
+        const isQuickMatch = room.name.startsWith('Quick Match ');
+        const gameRoom = await GameManager.getOrCreate(
+          roomId,
+          roomCode || room.code,
+          { isQuickMatch }
+        );
+
+        // Keep existing in-memory rooms consistent with the database room type.
+        gameRoom.isQuickMatch = isQuickMatch;
 
         // If the user clicked join on ANOTHER room while we were waiting, ABORT this stale request!
         if (socket.latestRequestedRoomId !== roomId) {
@@ -151,6 +156,37 @@ const initSocket = (io) => {
           avatarUrl: socket.avatarUrl,
           weaponUrl: socket.weaponUrl,
         });
+
+        // A player joining after the match started must also be persisted.
+        // Without this record, their score and match history are lost.
+        if (
+          gameRoom.isRunning &&
+          gameRoom.matchId &&
+          socket.playerId
+        ) {
+          try {
+            const [, created] = await MatchPlayer.findOrCreate({
+              where: {
+                match_id: gameRoom.matchId,
+                player_id: socket.playerId,
+              },
+              defaults: {
+                joined_at: new Date(playerState.joinedAt || Date.now()),
+              },
+            });
+
+            if (created) {
+              await Match.increment('player_count', {
+                where: { id: gameRoom.matchId },
+              });
+            }
+          } catch (matchPlayerError) {
+            logger.error(
+              '[LateJoin] Failed to create MatchPlayer:',
+              matchPlayerError.message
+            );
+          }
+        }
 
         // Update room player count
         await room.increment('player_count');
@@ -538,10 +574,25 @@ const initSocket = (io) => {
       // Update match_players stats & directly increment Player profile stats
       for (const ranking of results.rankings) {
         if (!ranking.playerId) continue;
-        await MatchPlayer.update(
-          { score: ranking.score, kills: ranking.kills, deaths: ranking.deaths, rank: ranking.rank },
-          { where: { match_id: match.id, player_id: ranking.playerId } }
-        );
+        const [matchPlayer] = await MatchPlayer.findOrCreate({
+          where: {
+            match_id: match.id,
+            player_id: ranking.playerId,
+          },
+          defaults: {
+            joined_at: new Date(
+              ranking.joinedAt || gameRoom.startedAt
+            ),
+          },
+        });
+
+        await matchPlayer.update({
+          score: ranking.score,
+          kills: ranking.kills,
+          deaths: ranking.deaths,
+          rank: ranking.rank,
+          left_at: new Date(ranking.leftAt || Date.now()),
+        });
 
         // const isWin = ranking.rank === 1 ? 1 : 0;
         // const isLoss = ranking.rank > 1 ? 1 : 0;
@@ -579,11 +630,6 @@ const initSocket = (io) => {
 
 
       // Gửi thời gian chơi của từng người để cập nhật nhiệm vụ hằng ngày
-      const playtimeSeconds = Math.max(
-        0,
-        Number(results.duration) || 0
-      );
-
       for (const ranking of results.rankings) {
         if (!ranking.playerId) continue;
 
@@ -594,7 +640,10 @@ const initSocket = (io) => {
           occurredAt: new Date().toISOString(),
           matchId: match.id,
           playerId: ranking.playerId,
-          durationSeconds: playtimeSeconds,
+          durationSeconds: Math.max(
+            0,
+            Number(ranking.playtimeSeconds) || 0
+          ),
         }).catch((eventError) => {
           logger.warn(
             '[DailyQuest] Failed to publish playtime event',
@@ -687,9 +736,12 @@ const initSocket = (io) => {
         gameRoom.matchId &&
         gameRoom.startedAt
       ) {
+        const joinedAt =
+          Number(leavingPlayer.joinedAt) || gameRoom.startedAt;
+
         const playtimeSeconds = Math.max(
           0,
-          Math.floor((Date.now() - gameRoom.startedAt) / 1000)
+          Math.floor((Date.now() - joinedAt) / 1000)
         );
 
         try {
