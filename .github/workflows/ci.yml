@@ -81,7 +81,7 @@ jobs:
       - name: Create Frontend Env File
         run: |
           echo "VITE_API_URL=https://arenablast-backend.icyhill-22f427c6.southeastasia.azurecontainerapps.io/api" > frontend/.env.production
-          echo "VITE_SOCKET_URL=https://arenablast-backend.icyhill-22f427c6.southeastasia.azurecontainerapps.io" >> frontend/.env.production
+          echo "VITE_SOCKET_URL=https://arenablast-pubsub.webpubsub.azure.com" >> frontend/.env.production
 
       - name: Build & push frontend
         uses: docker/build-push-action@v5

@@ -1,22 +1,36 @@
 const {
-  ATTACK_DAMAGE_KEY,
+  SLASH_COOLDOWN_KEY,
+  MOVEMENT_SPEED_KEY,
   MAP_ROTATION_KEY,
   DEFAULT_MAP_ROTATION,
   getMapRotation,
-  parseAttackDamage,
+  parsePositiveInt,
+  parsePositiveFloat,
   parseMapRotation,
 } = require('../appConfiguration');
 
 describe('Azure App Configuration gameplay validation', () => {
-  test('accepts the current 25 HP attack damage', () => {
-    expect(parseAttackDamage(25)).toBe(25);
-    expect(parseAttackDamage('25')).toBe(25);
+  test('accepts valid slash cooldown', () => {
+    expect(parsePositiveInt(800, SLASH_COOLDOWN_KEY, 100, 5000)).toBe(800);
+    expect(parsePositiveInt('800', SLASH_COOLDOWN_KEY, 100, 5000)).toBe(800);
   });
 
-  test.each([0, -1, 101, 12.5, 'invalid', '', null, undefined])(
-    'rejects invalid attack damage %p',
+  test.each([0, 50, 5001, 12.5, 'invalid', '', null, undefined])(
+    'rejects invalid slash cooldown %p',
     (value) => {
-      expect(() => parseAttackDamage(value)).toThrow(ATTACK_DAMAGE_KEY);
+      expect(() => parsePositiveInt(value, SLASH_COOLDOWN_KEY, 100, 5000)).toThrow(SLASH_COOLDOWN_KEY);
+    }
+  );
+
+  test('accepts valid movement speed', () => {
+    expect(parsePositiveFloat(3.5, MOVEMENT_SPEED_KEY, 0.5, 15.0)).toBe(3.5);
+    expect(parsePositiveFloat('3.5', MOVEMENT_SPEED_KEY, 0.5, 15.0)).toBe(3.5);
+  });
+
+  test.each([0, 0.4, 15.1, 'invalid', '', null, undefined])(
+    'rejects invalid movement speed %p',
+    (value) => {
+      expect(() => parsePositiveFloat(value, MOVEMENT_SPEED_KEY, 0.5, 15.0)).toThrow(MOVEMENT_SPEED_KEY);
     }
   );
 

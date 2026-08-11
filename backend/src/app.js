@@ -27,6 +27,7 @@ const app = express();
 app.use(helmet({
   crossOriginEmbedderPolicy: false,   // Allow embedding for game assets
   crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin images for canvas
+  contentSecurityPolicy: false,       // Disable CSP to prevent 'eval' blocking in Socket.io/game logic
 }));
 
 app.use(cors({

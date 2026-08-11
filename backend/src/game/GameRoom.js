@@ -9,7 +9,6 @@ const logger = require('../utils/logger');
 
 const PLAYER_RADIUS = 16;
 const PARTICLE_RADIUS = 8;
-const ATTACK_COOLDOWN = 800;   // ms between attacks
 
 class GameRoom {
   constructor(roomId, roomCode, mapConfig) {
@@ -17,6 +16,7 @@ class GameRoom {
     this.roomCode = roomCode;
     this.mapConfig = mapConfig;
     this.players = new Map();      // socketId → player state
+    this.departedPlayers = new Map();
     this.particles = new Map();    // particleId → particle state
     this.isRunning = false;
     this.tickInterval = null;
@@ -172,10 +172,24 @@ class GameRoom {
 
   removePlayer(socketId) {
     const player = this.players.get(socketId);
-    this.players.delete(socketId);
-    if (player) {
-      logger.gameEvent('player_left', { roomId: this.roomId, nickname: player.nickname });
+
+    if (player && this.isRunning) {
+      const participantKey = player.playerId || socketId;
+
+      this.departedPlayers.set(participantKey, {
+        ...player,
+      });
     }
+
+    this.players.delete(socketId);
+
+    if (player) {
+      logger.gameEvent('player_left', {
+        roomId: this.roomId,
+        nickname: player.nickname,
+      });
+    }
+
     return player;
   }
 
@@ -205,7 +219,7 @@ class GameRoom {
     if (!attacker || !attacker.alive || attacker.respawning) return null;
 
     const now = Date.now();
-    if (now - attacker.lastAttack < ATTACK_COOLDOWN) return null;
+    if (now - attacker.lastAttack < GAME.slashCooldownMs) return null;
     attacker.lastAttack = now;
 
     // Return empty array instead of null so caller knows attack happened (even if no hit)
@@ -218,10 +232,10 @@ class GameRoom {
       );
 
       // Dynamic attack range based on level (increases range)
-      // Level 1 = 50, Level 10 = 122, Level 20 = 202
       const dynamicAttackRange = 50 + (attacker.level - 1) * 8;
 
-      if (dist <= dynamicAttackRange) {
+      // Hit if the distance between centers is less than the attack range plus the target's radius
+      if (dist <= dynamicAttackRange + (target.radius || 20)) {
         // Check line of sight (cover/hiding)
         let hasLoS = true;
         if (this.mapConfig.theme?.obstacles) {
@@ -258,7 +272,7 @@ class GameRoom {
           logger.gameEvent('player_killed', { killer: attacker.nickname, victim: target.nickname });
 
           target.respawning = true;
-          target.respawnTimer = 3;
+          target.respawnTimer = 5;
           
           // Punish level
           target.level = Math.max(1, target.level - 1);
@@ -315,8 +329,9 @@ class GameRoom {
         continue;
       }
 
-      // Hitbox radius fixed to 20 for collisions
-      player.radius = 20;
+      // Hitbox radius scales with level
+      const scale = Math.min(1 + player.level * GAME.sizeIncreasePerLevel, GAME.maxPlayerSizeMultiplier);
+      player.radius = 20 * scale;
 
       // Handle Boost XP Drain
       if (player.isBoosting) {
@@ -475,10 +490,11 @@ class GameRoom {
       maxXp: p.maxXp,
       alive: p.alive,
       respawning: p.respawning,
+      respawnTimer: p.respawnTimer,
       facingX: p.facingX,
       facingY: p.facingY,
       isBoosting: p.isBoosting,
-      scale: Math.min(1 + p.level * 0.04, 2.0),
+      scale: Math.min(1 + p.level * GAME.sizeIncreasePerLevel, GAME.maxPlayerSizeMultiplier),
       avatarUrl: p.avatarUrl,
       weaponUrl: p.weaponUrl,
       radius: p.radius,
@@ -494,6 +510,7 @@ class GameRoom {
       particles: [], // Omitted to save bandwidth
       startTime: this.startedAt,
       matchDuration: this.matchDuration,
+      timeLeft: this.startedAt ? Math.max(0, Math.floor((this.matchDuration - (now - this.startedAt)) / 1000)) : 0,
       timestamp: now,
     };
   }
@@ -520,7 +537,7 @@ class GameRoom {
       else if (p.dx || p.dy) state = 1;
       
       const angle = Math.atan2(p.facingY || 0, p.facingX || 1);
-      const scale = Math.min(1 + p.level * 0.04, 2.0);
+      const scale = Math.min(1 + p.level * GAME.sizeIncreasePerLevel, GAME.maxPlayerSizeMultiplier);
 
       cellsData[cellId].push([
         p.socketId,
@@ -562,10 +579,11 @@ class GameRoom {
   // ── Start / Stop ─────────────────────────────────────────────
 
   start(matchId) {
+    this.departedPlayers.clear();
     this.matchId = matchId;
     this.isRunning = true;
     this.startedAt = Date.now();
-    this.matchDuration = 600 * 1000; // 10 minutes
+    this.matchDuration = 4 * 60 * 1000; // 4 minutes
     this.tickCount = 0;
 
     this._logEvent('match_started', { matchId });
@@ -586,7 +604,17 @@ class GameRoom {
   // ── Results ──────────────────────────────────────────────────
 
   getResults() {
-    const rankings = Array.from(this.players.values())
+    const participants = new Map();
+
+    for (const player of this.departedPlayers.values()) {
+      participants.set(player.playerId || player.socketId, player);
+    }
+
+    for (const player of this.players.values()) {
+      participants.set(player.playerId || player.socketId, player);
+    }
+
+    const rankings = Array.from(participants.values())
       .sort((a, b) => b.score - a.score)
       .map((p, i) => ({
         playerId: p.playerId,

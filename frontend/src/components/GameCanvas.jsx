@@ -117,19 +117,14 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
         const len = Math.hypot(dx, dy);
         if (len > 0) { dx /= len; dy /= len; }
         headingRef.current = { dx, dy };
-      } else if (joystickRef && joystickRef.current && (Math.abs(joystickRef.current.dx) > 0.05 || Math.abs(joystickRef.current.dy) > 0.05 || joystickRef.current.boosting !== undefined)) {
+      } else if (joystickRef && joystickRef.current && (Math.abs(joystickRef.current.dx) > 0.05 || Math.abs(joystickRef.current.dy) > 0.05)) {
         // 2. Mobile Touch Joystick steering
-        if (Math.abs(joystickRef.current.dx) > 0.05 || Math.abs(joystickRef.current.dy) > 0.05) {
-          hasActiveSteer = true;
-          dx = joystickRef.current.dx;
-          dy = joystickRef.current.dy;
-          const len = Math.hypot(dx, dy);
-          if (len > 0) {
-            headingRef.current = { dx: dx / len, dy: dy / len };
-          }
-        }
-        if (joystickRef.current.boosting !== undefined) {
-          isBoostingRef.current = joystickRef.current.boosting;
+        hasActiveSteer = true;
+        dx = joystickRef.current.dx;
+        dy = joystickRef.current.dy;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          headingRef.current = { dx: dx / len, dy: dy / len };
         }
       } else if (mousePosRef.current.active) {
         // 3. Laptop Mouse steering (steer toward cursor)
@@ -160,15 +155,20 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
         dy = headingRef.current.dy;
       }
 
+      // Combine boost states (Right-Click sets isBoostingRef, Shift keys, or Mobile Dash button)
+      let currentBoosting = isBoostingRef.current;
+      if (keys.has('ShiftLeft') || keys.has('ShiftRight')) currentBoosting = true;
+      if (joystickRef && joystickRef.current && joystickRef.current.boosting) currentBoosting = true;
+
       const now = performance.now();
-      const moved = Math.abs(dx - lastMoveRef.current.dx) > 0.02 || Math.abs(dy - lastMoveRef.current.dy) > 0.02 || isBoostingRef.current !== lastMoveRef.current.isBoosting;
+      const moved = Math.abs(dx - lastMoveRef.current.dx) > 0.02 || Math.abs(dy - lastMoveRef.current.dy) > 0.02 || currentBoosting !== lastMoveRef.current.isBoosting;
       const isMoving = Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01;
-      const shouldResend = (isMoving || isBoostingRef.current) && (now - lastMoveRef.current.lastSent > 120);
+      const shouldResend = (isMoving || currentBoosting) && (now - lastMoveRef.current.lastSent > 120);
 
       // Send movement heading to server
       if (moved || shouldResend) {
-        lastMoveRef.current = { dx, dy, isBoosting: isBoostingRef.current, lastSent: now };
-        onMove?.(dx, dy, isBoostingRef.current);
+        lastMoveRef.current = { dx, dy, isBoosting: currentBoosting, lastSent: now };
+        onMove?.(dx, dy, currentBoosting);
       }
 
       // Render frame
@@ -571,7 +571,7 @@ export default function GameCanvas({ onMove, onAttack, mapWidth, mapHeight, joys
       ctx.rotate(angle);
       
       // Dynamic weapon size based on level (same as backend attackRange)
-      const dynamicAttackRange = 50 + ((player.level || 1) - 1) * 5; 
+      const dynamicAttackRange = 50 + ((player.level || 1) - 1) * 8; 
       const weaponSize = dynamicAttackRange * 0.8; // Scale weapon image to fit range
       
       // Draw weapon offset slightly from body

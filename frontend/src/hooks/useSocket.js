@@ -8,6 +8,7 @@ import { playAnnouncer } from '../api/speech';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
+
 let socketInstance = null;
 let localKillStreak = 0; // Tracks consecutive kills without dying
 
@@ -36,9 +37,19 @@ export const useSocket = () => {
   useEffect(() => {
     if (!token) return;
 
-    const socket = io(SOCKET_URL, {
+    // Determine URL and Path. Use VITE_PUBSUB_URL (from the user's screenshot) or VITE_SOCKET_URL
+    let finalUrl = import.meta.env.VITE_PUBSUB_URL || import.meta.env.VITE_SOCKET_URL || SOCKET_URL;
+    let customPath = "/socket.io/"; // default Socket.IO path
+
+    // If using Azure Web PubSub, we MUST point to the specific hub path
+    if (finalUrl.includes('webpubsub.azure')) {
+      customPath = "/clients/socketio/hubs/ArenaBlastHub";
+    }
+
+    const socket = io(finalUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      path: customPath,
+      transports: ['polling', 'websocket'],
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     });

@@ -40,7 +40,7 @@ async function bootstrap() {
 
   const io = new SocketServer(httpServer, {
     cors: {
-      origin: CORS_ORIGIN,
+      origin: true, // Dynamically reflect origin to prevent CORS blocking during polling
       methods: ['GET', 'POST'],
       credentials: true,
     },
@@ -50,8 +50,8 @@ async function bootstrap() {
 
   const { useAzureSocketIO } = require("@azure/web-pubsub-socket.io");
 
-  // 5.5 Setup Azure Web PubSub or Redis Adapter (Temporarily bypassed for stability)
-  if (false && env.WEB_PUBSUB_CONNECTION_STRING) {
+  // 5.5 Setup Azure Web PubSub or Redis Adapter
+  if (env.WEB_PUBSUB_CONNECTION_STRING) {
     logger.info('[Socket] Configuring Azure Web PubSub for Socket.IO...');
     useAzureSocketIO(io, {
       hub: "ArenaBlastHub",

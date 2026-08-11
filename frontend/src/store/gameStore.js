@@ -30,7 +30,8 @@ const useGameStore = create((set, get) => ({
   // Safe zone and timer
   safeZone: null,
   startTime: null,
-  matchDuration: 600000,
+  matchDuration: 240000,
+  timeLeft: 0,
 
   // Leaderboard (in-match)
   matchLeaderboard: [],
@@ -87,7 +88,8 @@ const useGameStore = create((set, get) => ({
       myRespawnTimer: me?.respawnTimer ?? 0,
       safeZone: state.safeZone ?? null,
       startTime: state.startTime ?? null,
-      matchDuration: state.matchDuration ?? 600000,
+      matchDuration: state.matchDuration ?? 240000,
+      timeLeft: state.timeLeft ?? get().timeLeft,
     });
   },
 
