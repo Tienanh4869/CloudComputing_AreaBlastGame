@@ -2,12 +2,8 @@
 const http = require('http');
 const { Server: SocketServer } = require('socket.io');
 const { createAdapter } = require('@socket.io/redis-adapter');
-const app = require('./app');
-const { connectRedis, getPubSub } = require('./config/redis');
-const { initSocket } = require('./socket');
 const env = require('./config/env');
 const { PORT, CORS_ORIGIN, NODE_ENV } = env;
-const { initializeAppConfiguration } = require('./config/appConfiguration');
 const logger = require('./utils/logger');
 
 async function bootstrap() {
@@ -16,11 +12,19 @@ async function bootstrap() {
     await env.loadKeyVaultSecrets();
   }
 
+  // These modules read credentials/configuration while being imported.
+  // Load them only after Key Vault has populated env to avoid clients being
+  // created with stale fallback values (especially the Sequelize password).
+  const { initializeAppConfiguration } = require('./config/appConfiguration');
+  const { connectDB, sequelize } = require('./config/database');
+  const { connectRedis, getPubSub } = require('./config/redis');
+  const app = require('./app');
+  const { initSocket } = require('./socket');
+
   // Load dynamic gameplay settings. Failures keep the safe local defaults.
   await initializeAppConfiguration();
 
-  // 1. Connect to PostgreSQL (must be required AFTER secrets are loaded)
-  const { connectDB, sequelize } = require('./config/database');
+  // 1. Connect to PostgreSQL
   await connectDB();
 
   // 2. Sync DB models (alter: safe for dev, use migrations in prod)
@@ -92,6 +96,9 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  logger.error('[Server] Failed to start:', err);
+  logger.error('[Server] Failed to start', {
+    error: err.message,
+    code: err.original?.code || err.parent?.code || err.code,
+  });
   process.exit(1);
 });
