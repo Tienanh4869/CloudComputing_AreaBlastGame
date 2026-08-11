@@ -12,7 +12,11 @@ function getProgressText(quest) {
   const target = Number(quest.target) || 0;
 
   if (quest.unit === 'seconds') {
-    return `${Math.floor(progress / 60)} / ${Math.ceil(target / 60)} phút`;
+    const safeProgress = Math.min(progress, target);
+    const minutes = Math.floor(safeProgress / 60);
+    const seconds = safeProgress % 60;
+
+    return `${minutes} phút ${seconds} giây / ${Math.ceil(target / 60)} phút`;
   }
 
   if (quest.unit === 'kills') {
