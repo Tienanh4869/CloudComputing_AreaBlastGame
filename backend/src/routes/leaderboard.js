@@ -58,7 +58,6 @@ router.get('/', async (req, res, next) => {
             FROM match_players AS mp
             INNER JOIN matches AS m
               ON m.id = mp.match_id
-            WHERE m.status = 'finished'
             GROUP BY mp.player_id
           ),
 
@@ -166,12 +165,11 @@ router.get('/', async (req, res, next) => {
             INNER JOIN matches AS m
               ON m.id = mp.match_id
             CROSS JOIN bounds AS b
-            WHERE m.status = 'finished'
-              AND m.ended_at >= (
+            WHERE COALESCE(m.ended_at, mp.left_at, CURRENT_TIMESTAMP) >= (
                 b.start_local AT TIME ZONE
                   'Asia/Ho_Chi_Minh'
               )
-              AND m.ended_at < (
+              AND COALESCE(m.ended_at, mp.left_at, CURRENT_TIMESTAMP) < (
                 b.end_local AT TIME ZONE
                   'Asia/Ho_Chi_Minh'
               )
