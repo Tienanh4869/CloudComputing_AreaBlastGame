@@ -45,7 +45,7 @@ export default function LobbyPage() {
   const [showProfile, setShowProfile] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [isFindingMatch, setIsFindingMatch] = useState(false);
-  const [queueInfo, setQueueInfo] = useState({ current: 1, min: 4, max: 8, needed: 8, startingIn: null });
+  const [queueInfo, setQueueInfo] = useState({ current: 1, min: 4, max: 20, needed: 20, startingIn: null });
 
   const [joinCode, setJoinCode] = useState('');
   const [newRoom, setNewRoom] = useState({ name: '', max_players: 4 });
@@ -97,8 +97,8 @@ export default function LobbyPage() {
         setQueueInfo({
           current: data.current || 1,
           min: data.min || 4,
-          max: data.max || 8,
-          needed: data.needed || data.max || 8,
+          max: data.max || 20,
+          needed: data.needed || data.max || 20,
           startingIn: data.startingIn !== undefined ? data.startingIn : null,
         });
       };
@@ -116,7 +116,7 @@ export default function LobbyPage() {
 
   const handleQuickMatch = () => {
     if (!socket) return;
-    setQueueInfo({ current: 1, needed: 8 });
+    setQueueInfo({ current: 1, needed: 20 });
     setIsFindingMatch(true);
     socket.emit('join_quick_match');
   };
@@ -331,7 +331,7 @@ export default function LobbyPage() {
                   }}
                   onClick={handleQuickMatch}
                 >
-                  🎲 QUICK MATCH (4-8P)
+                  🎲 QUICK MATCH (1-20P)
                 </button>
 
                 <button
@@ -734,7 +734,7 @@ export default function LobbyPage() {
               🎯 Ghép Trận Ngẫu Nhiên
             </h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: 14 }}>
-              (Tối thiểu 4 người — Tối đa 8 người)
+              (Tối thiểu 4 người — Tối đa 20 người)
             </p>
 
             <div
@@ -757,7 +757,7 @@ export default function LobbyPage() {
               >
                 <span>Đang chờ trong hàng:</span>
                 <span style={{ color: queueInfo.current >= (queueInfo.min || 4) ? '#00ffcc' : '#ffcc00' }}>
-                  {queueInfo.current} / {queueInfo.max || 8} Người
+                  {queueInfo.current} / {queueInfo.max || 20} Người
                 </span>
               </div>
 
@@ -773,7 +773,7 @@ export default function LobbyPage() {
               >
                 <div
                   style={{
-                    width: `${Math.min(100, Math.max(12, (queueInfo.current / (queueInfo.max || 8)) * 100))}%`,
+                    width: `${Math.min(100, Math.max(12, (queueInfo.current / (queueInfo.max || 20)) * 100))}%`,
                     height: '100%',
                     background:
                       queueInfo.current >= (queueInfo.min || 4)
@@ -786,9 +786,9 @@ export default function LobbyPage() {
               </div>
 
               <div style={{ marginTop: 10 }}>
-                {queueInfo.current >= (queueInfo.max || 8) ? (
+                {queueInfo.current >= (queueInfo.max || 20) ? (
                   <p style={{ color: '#00ffcc', fontSize: '0.85rem', fontWeight: 'bold', margin: 0 }}>
-                    🚀 Đủ 8 người! Đang khởi tạo trận đấu...
+                    🚀 Đủ 20 người! Đang khởi tạo trận đấu...
                   </p>
                 ) : queueInfo.current >= (queueInfo.min || 4) ? (
                   <p style={{ color: '#00ffcc', fontSize: '0.85rem', fontWeight: 'bold', margin: 0 }}>
